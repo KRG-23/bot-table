@@ -1,0 +1,19 @@
+FROM node:20-alpine AS base
+WORKDIR /usr/src/app
+
+FROM base AS deps
+COPY package*.json ./
+RUN npm ci
+
+FROM deps AS build
+COPY tsconfig.json ./
+COPY src ./src
+RUN npm run build
+
+FROM node:20-alpine AS prod
+WORKDIR /usr/src/app
+ENV NODE_ENV=production
+COPY --from=deps /usr/src/app/package*.json ./
+COPY --from=deps /usr/src/app/node_modules ./node_modules
+COPY --from=build /usr/src/app/dist ./dist
+CMD ["node", "dist/index.js"]
