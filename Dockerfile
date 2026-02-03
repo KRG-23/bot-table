@@ -1,5 +1,6 @@
-FROM node:20-alpine AS base
+FROM node:20-bookworm-slim AS base
 WORKDIR /usr/src/app
+RUN apt-get update -y && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
 
 FROM base AS deps
 COPY package*.json ./
@@ -10,7 +11,7 @@ COPY tsconfig.json ./
 COPY src ./src
 RUN npm run build
 
-FROM node:20-alpine AS prod
+FROM node:20-bookworm-slim AS prod
 WORKDIR /usr/src/app
 ENV NODE_ENV=production
 COPY --from=deps /usr/src/app/package*.json ./
