@@ -40,10 +40,11 @@
     ]
   },
   "dependencies": {
+    "@prisma/client": "^6.1.0",
     "dayjs": "^1.11.19",
     "discord.js": "^14.25.1",
     "dotenv": "^17.2.3",
-    "@prisma/client": "^6.1.0"
+    "pino": "^9.7.0"
   },
   "devDependencies": {
     "@types/node": "^25.2.0",

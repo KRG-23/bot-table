@@ -1,53 +1,93 @@
-# Plan d’action pour démarrer le développement du bot
+# TODO – Plan d’action (suivi)
 
-## Phase 0 — Préparation (jour 0)
-- Choisir la stack : Node.js + TypeScript, discord.js v14, Prisma + PostgreSQL, dayjs (timezone Europe/Paris), bullmq ou node-cron pour les tâches planifiées.
-- Initialiser le repo : `npm init -y`, TypeScript, ts-node-dev, eslint/prettier, husky + lint-staged (optionnel).
-- Créer `docker-compose.yml` (services : bot, postgres, volume data, volume backups) + `.env.example` (dev/prod).
+## Phase 0 — Préparation
 
-## Phase 1 — Modèle et persistance (jour 1)
-- Définir le schéma Prisma : tables `users`, `events`, `matches`, `notifications`, `settings` (option mention thread), enum `game_system`.
-- Générer et appliquer la première migration sur Postgres (dev).
-- Ajouter seeds minimales (game systems).
+- [x] Choisir la stack (Node.js 20, TypeScript, discord.js v14, Prisma + PostgreSQL)
+- [x] Initialiser le repo (TypeScript, scripts npm, bootstrap `src/index.ts`)
+- [x] Ajouter ESLint/Prettier + Husky + lint-staged
+- [x] Ajouter `docker-compose.yml` + `Dockerfile` + `.env.example`
+- [x] Ajouter `.gitignore` et créer `data/backups/`
 
-## Phase 2 — Socle bot Discord (jour 1-2)
-- Bootstrap discord.js : login, intents requis (Guilds, GuildMessages, DirectMessages, MessageContent si nécessaire, GuildMembers pour rôles admin), gestion des erreurs.
-- Enregistrer les slash commands de base : `/health`, `/config show`.
-- Mettre en place un logger structuré (pino/winston) et un service de config lisant `.env`.
+## Phase 1 — Modèle et persistance
 
-## Phase 3 — Gestion des tables et événements (jour 2)
-- Implémenter `/tables set|show <date>` (admin) avec validation de date vendredi.
-- Service calendrier : calcul des vendredis, détection vacances/veille vacances académie Nantes (source API ou fichier calendrier à charger).
-- Modèle `events` : création/maj du nombre de tables, statut ouvert/fermé.
+- [x] Définir le schéma Prisma (users, events, matches, notifications, settings)
+- [x] Ajouter Prisma CLI + `@prisma/client`
+- [x] Générer le client Prisma
+- [x] Appliquer la migration init (Postgres)
+- [x] Ajuster Docker (base image + openssl) pour Prisma
+- [x] Ajuster `docker-compose.yml` pour les identifiants `.env.dev`
+- [x] Porter Postgres host sur `5433` (pour éviter conflit local)
+- [x] Ajouter `DATABASE_URL` à `.env.example` et `.env.dev`
 
-## Phase 4 — Collecte des parties (jour 3)
-- Listener de messages dans les fils ciblés : extraction des deux mentions + jeu, contrôle doublon joueur, création `match` en `en_attente`.
-- Réponses thread + DM récapitulatif.
-- Slash/boutons : `Valider/Refuser/Annuler` sur un match (admin ou joueurs concernés pour annulation) via composants interactifs.
+## Phase 2 — Socle bot Discord
 
-## Phase 5 — Automatisations hebdo (jour 3-4)
-- Job « premier dimanche du mois » : création des fils par jeu pour chaque vendredi du mois, sauf vendredis fermés (vacances/veille).
-- Job « mercredi 21h » : récap aux admins + auto-validation si capacité OK.
-- Job « vendredi 17h » : notification finale aux matches validés.
-- Job « samedi 23h » : dump Postgres, rotation (garder 4 dernières).
+- [x] Définir intents requis (Guilds, GuildMessages, MessageContent, DirectMessages, GuildMembers)
+- [x] Initialiser client discord.js (login, events `ready`, `error`)
+- [x] Charger config (env validation + valeurs par défaut)
+- [x] Enregistrer slash commands de base (`/health`, `/config show`)
+- [x] Logger structuré (pino/winston) + niveaux + format JSON
+  - [ ] Bloquant : confirmer les permissions OAuth2 nécessaires (scopes + intents)
+  - [ ] Bloquant : valider IDs serveur/canal (test + prod)
 
-## Phase 6 — Notifications et règles métier (jour 4)
-- Implémenter option de mention dans le fil (setting admin) lors de validation.
-- Bloquer validation/creation de match sur dates fermées, message explicatif.
-- Auto-validation immédiate quand capacité suffisante ; recalcul après annulation.
-- Empêcher double réservation d’un joueur sur un même vendredi.
+## Phase 3 — Gestion des tables & événements
 
-## Phase 7 — Observabilité et qualité (jour 4-5)
-- Logs structurés (correlation ids), métriques simples (Prom client + /metrics optionnel).
-- Tests : unités sur règles métier (capacité, doublons, annulation), intégration légère sur commandes.
-- Script `npm run check` (lint + tests).
+- [ ] Implémenter `/tables set|show <date>` (admin)
+- [ ] Validation date (vendredi) + timezone Europe/Paris
+- [ ] Service calendrier (vendredis + vacances académie Nantes)
+- [ ] Source vacances (API officielle ou fichier iCal/json)
+- [ ] Créer/mettre à jour `events` (tables, statut, fermeture)
+  - [ ] Bloquant : choisir la source officielle des vacances (API Education/Nantes vs fichier)
 
-## Phase 8 — Emballage et docs (jour 5)
-- Finaliser `docker-compose.yml`, Dockerfile prod (node:alpine), entrypoint avec migrations auto (`prisma migrate deploy`).
-- Scripts npm : `dev`, `build`, `start`, `lint`, `test`, `db:seed`, `backup`.
-- Documenter : README (setup, env, commandes), guide d’exploitation (restore backup, rotation), manuel admin Discord (permissions, commandes, cas d’usage).
+## Phase 4 — Collecte des parties
+
+- [ ] Listener messages dans threads (mention bot + 2 joueurs + jeu)
+- [ ] Parsing message + validation (2 mentions, jeu reconnu)
+- [ ] Créer match `en_attente`, refuser doublons (1 match/joueur/jour)
+- [ ] Réponse de confirmation (thread + DM)
+- [ ] Boutons/modales : valider/refuser/annuler
+- [ ] Gestion permissions (admin vs joueur concerné)
+  - [ ] Bloquant : valider le format exact du message (mention bot + 2 joueurs + jeu)
+
+## Phase 5 — Automatisations hebdo
+
+- [ ] Job “1er dimanche” : création des fils par jeu
+- [ ] Nom des fils : “Soirée <Jeu> - <date>”
+- [ ] Skip vacances/veille vacances + message d’info
+- [ ] Job “mercredi 21h” : récap + auto-validation si capacité OK
+- [ ] Job “vendredi 17h” : notifications finales
+- [ ] Job “samedi 23h” : backup + rétention 1 mois
+- [ ] Script backup Postgres + purge old dumps
+  - [ ] Bloquant : définir le moteur de scheduling (node-cron vs bullmq) et son déploiement
+
+## Phase 6 — Notifications & règles métier
+
+- [ ] Option mention dans le fil (setting admin)
+- [ ] DM systématique + option mention thread
+- [ ] Blocage sur dates fermées (vacances)
+- [ ] Auto-validation à la demande (après annulation)
+- [ ] Empêcher double réservation joueur
+- [ ] Gestion “abandon” (nouvelle notification possible)
+  - [ ] Bloquant : clarifier si mention dans thread est activable par serveur ou par événement
+
+## Phase 7 — Observabilité & qualité
+
+- [ ] Logs structurés + rotation
+- [ ] Métriques basiques (parties, erreurs Discord)
+- [ ] Tests unitaires règles métier
+- [ ] Tests parsing messages + permissions
+- [ ] Script `npm run check` (lint + tests)
+  - [ ] Bloquant : définir le niveau minimal de tests avant prod (smoke vs unit)
+
+## Phase 8 — Packaging & docs
+
+- [ ] Dockerfile prod final + migrations auto
+- [ ] `docker-compose` prod (bot + postgres + volumes)
+- [ ] Scripts npm (`dev`, `build`, `start`, `backup`)
+- [ ] README setup + guide d’exploitation (backup/restore)
+- [ ] Manuel admin Discord
 
 ## Phase 9 — Vérifications finales
-- Scénarios d’acceptation (section 12 du cahier) joués sur serveur de test avec canaux/IDs fournis.
-- Vérifier gestion fuseau + changement d’heure.
-- Vérifier purge des backups et re-lancement après redémarrage (persistance volumes).
+
+- [ ] Scénarios d’acceptation (section 12)
+- [ ] Vérifier fuseau + changement d’heure
+- [ ] Vérifier persistance & redémarrage

@@ -1,17 +1,16 @@
-import dotenv from "dotenv";
+import { loadConfig } from "./config";
+import { createClient } from "./discord/client";
+import { registerCommands } from "./discord/register-commands";
+import { createLogger } from "./logger";
 
-dotenv.config();
-
-// Placeholder bootstrap while scaffolding the bot.
 async function main() {
-  const token = process.env.DISCORD_TOKEN;
+  const config = loadConfig();
+  const logger = createLogger(config.logLevel);
 
-  if (!token) {
-    console.error("DISCORD_TOKEN manquant dans l'environnement.");
-    process.exit(1);
-  }
+  await registerCommands(config, logger);
 
-  console.log("Munitorum bot scaffold initialisé. Implémentation à venir.");
+  const client = createClient(config, logger);
+  await client.login(config.discordToken);
 }
 
 main().catch((err) => {
