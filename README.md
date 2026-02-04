@@ -1,10 +1,12 @@
 # Munitorum
 
+![Munitorum icon](./munitorum.png)
+
 Munitorum is a Discord bot for tabletop reservations (Warhammer 40k / AoS / Kill Team). It automates table availability, match submissions, validation, and player notifications.
 
 ## Features (current / planned)
-- Slash commands: `/health`, `/config show`
-- Table capacity management (planned)
+- Slash commands: `/mu_health`, `/mu_config show`, `/mu_tables set|show`
+- Table capacity management
 - Match submissions + validation (planned)
 - Weekly automation (planned)
 - PostgreSQL persistence + backups (planned)
@@ -46,8 +48,10 @@ Enable the following **Privileged Gateway Intents** in the Discord Developer Por
 - Server Members Intent
 
 ## Commands
-- `/health` — check bot status
-- `/config show` — show current config (safe fields only)
+- `/mu_health` — check bot status
+- `/mu_config show` — show current config (safe fields only)
+- `/mu_tables set <date> <count>` — set tables for a Friday (date format `DD/MM/YYYY`)
+- `/mu_tables show <date>` — show tables for a Friday
 
 ## Environment variables
 See `.env.example` for all options.
@@ -57,9 +61,11 @@ Key vars:
 - `DISCORD_GUILD_ID` — target server ID
 - `DISCORD_CHANNEL_ID` — target channel ID
 - `DISCORD_APP_ID` — application ID
+- `ADMIN_ROLE_ID` — role ID allowed to manage tables (optional; defaults to server admin)
 - `DATABASE_URL` — Postgres connection string
 - `MENTION_IN_THREAD` — `true`/`false`
 - `LOG_LEVEL` — `info`, `debug`, etc.
+- `VACATION_ACADEMY` — academy used for school holidays (default: Nantes)
 
 ## Docker notes
 - The Postgres host port is mapped to **5433** to avoid conflicts with other local instances.

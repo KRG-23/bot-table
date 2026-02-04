@@ -31,12 +31,12 @@
 
 ## Phase 3 — Gestion des tables & événements
 
-- [ ] Implémenter `/tables set|show <date>` (admin)
-- [ ] Validation date (vendredi) + timezone Europe/Paris
-- [ ] Service calendrier (vendredis + vacances académie Nantes)
-- [ ] Source vacances (API officielle ou fichier iCal/json)
-- [ ] Créer/mettre à jour `events` (tables, statut, fermeture)
-  - [ ] Bloquant : choisir la source officielle des vacances (API Education/Nantes vs fichier)
+- [x] Implémenter `/tables set|show <date>` (admin)
+- [x] Validation date (vendredi) + timezone Europe/Paris
+- [x] Service calendrier (vacances académie Nantes via API)
+- [x] Source vacances (API officielle)
+- [x] Créer/mettre à jour `events` (tables, statut, fermeture)
+  - [x] Bloquant : choisir la source officielle des vacances (API Education/Nantes vs fichier)
 
 ## Phase 4 — Collecte des parties
 
