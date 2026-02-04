@@ -3,6 +3,9 @@ services:
     build: .
     env_file:
       - .env.dev
+    dns:
+      - ${DNS_PRIMARY:-1.1.1.1}
+      - ${DNS_SECONDARY:-8.8.8.8}
     depends_on:
       postgres:
         condition: service_healthy

@@ -39,19 +39,6 @@ export function createClient(config: AppConfig, logger: Logger): Client {
       logger.warn({ ageMs, command: interaction.commandName }, "Interaction received late");
     }
 
-    logger.info(
-      {
-        interactionId: interaction.id,
-        command: interaction.commandName,
-        guildId: interaction.guildId,
-        userId: interaction.user?.id,
-        applicationId: interaction.applicationId,
-        instanceId,
-        ageMs
-      },
-      "Interaction received"
-    );
-
     try {
       await handleInteraction(interaction, config, logger);
     } catch (err) {

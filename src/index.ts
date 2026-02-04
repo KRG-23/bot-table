@@ -32,13 +32,44 @@ async function main() {
     logger.warn("TLS verification disabled for outbound HTTPS requests");
   }
 
-  await registerCommands(config, logger);
+  await registerCommands(config, logger).catch((err) => {
+    logger.error({ err }, "Command registration failed, continuing startup");
+  });
 
   const client = createClient(config, logger);
-  await client.login(config.discordToken);
+  await loginWithRetry(client, config.discordToken, logger);
 }
 
 main().catch((err) => {
   console.error("Erreur au démarrage :", err);
   process.exit(1);
 });
+
+async function loginWithRetry(
+  client: ReturnType<typeof createClient>,
+  token: string,
+  logger: ReturnType<typeof createLogger>
+): Promise<void> {
+  const maxDelayMs = 10000;
+  let attempt = 0;
+
+  while (true) {
+    attempt += 1;
+    try {
+      await client.login(token);
+      return;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      if (message.toLowerCase().includes("invalid token")) {
+        throw err;
+      }
+      const delayMs = Math.min(500 * attempt, maxDelayMs);
+      logger.warn({ err, attempt, delayMs }, "Discord login failed, retrying");
+      await sleep(delayMs);
+    }
+  }
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
