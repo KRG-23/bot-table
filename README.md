@@ -42,6 +42,16 @@ docker compose --env-file .env.dev run --rm bot npm run prisma:migrate
 docker compose --env-file .env.dev up bot
 ```
 
+### TLS note (DEV only)
+If your network uses TLS inspection (self-signed certs), local dev may fail with
+`self-signed certificate in certificate chain`. For **DEV only**, you can disable
+TLS verification via:
+```
+ALLOW_INSECURE_TLS=true
+NODE_TLS_REJECT_UNAUTHORIZED=0
+```
+Never use this in production. For PROD, install the proper root CA.
+
 ## Discord configuration
 Enable the following **Privileged Gateway Intents** in the Discord Developer Portal:
 - Message Content Intent
@@ -66,6 +76,7 @@ Key vars:
 - `MENTION_IN_THREAD` — `true`/`false`
 - `LOG_LEVEL` — `info`, `debug`, etc.
 - `VACATION_ACADEMY` — academy used for school holidays (default: Nantes)
+- `ALLOW_INSECURE_TLS` — DEV only: disable TLS verification (default: false)
 
 ## Docker notes
 - The Postgres host port is mapped to **5433** to avoid conflicts with other local instances.

@@ -1,5 +1,5 @@
 import type { APIInteractionGuildMember, GuildMember } from "discord.js";
-import { PermissionFlagsBits } from "discord.js";
+import { PermissionFlagsBits, PermissionsBitField } from "discord.js";
 
 import type { AppConfig } from "../config";
 
@@ -23,6 +23,11 @@ export function isAdminMember(member: InteractionMember, config: AppConfig): boo
   }
 
   if ("permissions" in member) {
+    if (typeof member.permissions === "string") {
+      const permissions = new PermissionsBitField(BigInt(member.permissions));
+      return permissions.has(PermissionFlagsBits.Administrator);
+    }
+
     return member.permissions.has(PermissionFlagsBits.Administrator);
   }
 

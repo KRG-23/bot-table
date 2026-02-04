@@ -2,7 +2,7 @@ import type { ChatInputCommandInteraction } from "discord.js";
 import type { Logger } from "pino";
 
 import type { AppConfig } from "../config";
-import { prisma } from "../db";
+import { getPrisma } from "../db";
 import { getClosureInfo } from "../services/vacations";
 import { formatFrenchDate, isFriday, parseFrenchDate } from "../utils/dates";
 
@@ -93,6 +93,7 @@ export async function handleInteraction(
     const eventDate = parsedDate.toDate();
 
     if (subcommand === "set") {
+      const prisma = getPrisma();
       const count = interaction.options.getInteger("count", true);
       const tables = closure.closed ? 0 : count;
 
@@ -127,6 +128,7 @@ export async function handleInteraction(
     }
 
     if (subcommand === "show") {
+      const prisma = getPrisma();
       const event = await prisma.event.findUnique({ where: { date: eventDate } });
       const tables = event?.tables ?? 0;
       const status = event?.status ?? (closure.closed ? "FERME" : "OUVERT");
