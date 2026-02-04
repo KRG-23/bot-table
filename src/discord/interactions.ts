@@ -1,3 +1,4 @@
+import { MessageFlags } from "discord.js";
 import type { ChatInputCommandInteraction } from "discord.js";
 import type { Logger } from "pino";
 
@@ -24,15 +25,17 @@ export async function handleInteraction(
   config: AppConfig,
   logger: Logger
 ): Promise<void> {
-  if (!interaction.isChatInputCommand()) {
-    return;
-  }
+  const replyEphemeral = async (content: string): Promise<void> => {
+    if (interaction.deferred || interaction.replied) {
+      await interaction.editReply(content);
+      return;
+    }
+
+    await interaction.reply({ content, flags: MessageFlags.Ephemeral });
+  };
 
   if (interaction.commandName === "mu_health") {
-    await interaction.reply({
-      content: "✅ Munitorum opérationnel.",
-      ephemeral: true
-    });
+    await replyEphemeral("✅ Munitorum opérationnel.");
     return;
   }
 
@@ -40,10 +43,7 @@ export async function handleInteraction(
     const subcommand = interaction.options.getSubcommand();
 
     if (subcommand === "show") {
-      await interaction.reply({
-        content: formatConfig(config),
-        ephemeral: true
-      });
+      await replyEphemeral(formatConfig(config));
       return;
     }
 
@@ -52,15 +52,12 @@ export async function handleInteraction(
 
   if (interaction.commandName === "mu_tables") {
     if (!interaction.inGuild()) {
-      await interaction.reply({ content: "Commande réservée au serveur.", ephemeral: true });
+      await replyEphemeral("Commande réservée au serveur.");
       return;
     }
 
     if (!interaction.member || !isAdminMember(interaction.member, config)) {
-      await interaction.reply({
-        content: "⛔ Cette commande est réservée aux administrateurs.",
-        ephemeral: true
-      });
+      await replyEphemeral("⛔ Cette commande est réservée aux administrateurs.");
       return;
     }
 
@@ -69,20 +66,16 @@ export async function handleInteraction(
     const parsedDate = parseFrenchDate(dateInput, config.timezone);
 
     if (!parsedDate) {
-      await interaction.reply({
-        content: "❌ Date invalide. Format attendu : JJ/MM/AAAA.",
-        ephemeral: true
-      });
+      await replyEphemeral("❌ Date invalide. Format attendu : JJ/MM/AAAA.");
       return;
     }
 
     if (!isFriday(parsedDate)) {
-      await interaction.reply({
-        content: "❌ La date doit être un vendredi.",
-        ephemeral: true
-      });
+      await replyEphemeral("❌ La date doit être un vendredi.");
       return;
     }
+
+    await replyEphemeral("⏳ Traitement en cours...");
 
     const closure = await getClosureInfo(
       parsedDate,
@@ -116,14 +109,11 @@ export async function handleInteraction(
         ? `⚠️ ${closure.reason ?? "Fermeture"} (${closure.period?.description ?? "Vacances"})`
         : "✅ Ouvert";
 
-      await interaction.reply({
-        content: [
-          `📅 ${formatFrenchDate(parsedDate)}`,
-          `Tables: ${tables}`,
-          `Statut: ${closureText}`
-        ].join("\n"),
-        ephemeral: true
-      });
+      await interaction.editReply(
+        [`📅 ${formatFrenchDate(parsedDate)}`, `Tables: ${tables}`, `Statut: ${closureText}`].join(
+          "\n"
+        )
+      );
       return;
     }
 
@@ -137,14 +127,13 @@ export async function handleInteraction(
         ? `⚠️ ${closure.reason ?? "Fermeture"} (${closure.period?.description ?? "Vacances"})`
         : "✅ Ouvert";
 
-      await interaction.reply({
-        content: [
+      await interaction.editReply(
+        [
           `📅 ${formatFrenchDate(parsedDate)}`,
           `Tables: ${tables}`,
           `Statut: ${status === "FERME" ? closureText : "✅ Ouvert"}`
-        ].join("\n"),
-        ephemeral: true
-      });
+        ].join("\n")
+      );
       return;
     }
   }

@@ -6,6 +6,7 @@ import type { AppConfig } from "../config";
 import { handleInteraction } from "./interactions";
 
 export function createClient(config: AppConfig, logger: Logger): Client {
+  const instanceId = process.env.HOSTNAME || `local-${process.pid}`;
   const client = new Client({
     intents: [
       GatewayIntentBits.Guilds,
@@ -21,20 +22,44 @@ export function createClient(config: AppConfig, logger: Logger): Client {
     logger.info(
       {
         user: client.user?.tag,
-        guildId: config.discordGuildId
+        guildId: config.discordGuildId,
+        instanceId
       },
       "Discord client ready"
     );
   });
 
-  client.on("interactionCreate", (interaction) => {
+  client.on("interactionCreate", async (interaction) => {
     if (!interaction.isChatInputCommand()) {
       return;
     }
 
-    handleInteraction(interaction, config, logger).catch((err) => {
-      logger.error({ err }, "Failed to handle interaction");
-    });
+    const ageMs = Date.now() - interaction.createdTimestamp;
+    if (ageMs > 2000) {
+      logger.warn({ ageMs, command: interaction.commandName }, "Interaction received late");
+    }
+
+    logger.info(
+      {
+        interactionId: interaction.id,
+        command: interaction.commandName,
+        guildId: interaction.guildId,
+        userId: interaction.user?.id,
+        applicationId: interaction.applicationId,
+        instanceId,
+        ageMs
+      },
+      "Interaction received"
+    );
+
+    try {
+      await handleInteraction(interaction, config, logger);
+    } catch (err) {
+      logger.error(
+        { err, ageMs, command: interaction.commandName },
+        "Failed to handle interaction"
+      );
+    }
   });
 
   client.on("error", (err) => {
