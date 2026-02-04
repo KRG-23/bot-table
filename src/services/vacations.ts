@@ -8,7 +8,7 @@ dayjs.extend(timezone);
 
 const API_BASE =
   "https://data.education.gouv.fr/api/explore/v2.1/catalog/datasets/fr-en-calendrier-scolaire/records";
-const POPULATION_VALUE = "Élèves";
+const POPULATION_VALUES = ["Élèves", "-"];
 const CACHE_TTL_MS = 12 * 60 * 60 * 1000;
 
 type VacationRecord = {
@@ -51,7 +51,6 @@ async function fetchVacations(academy: string, logger: Logger): Promise<Vacation
     url.searchParams.set("limit", String(limit));
     url.searchParams.set("offset", String(offset));
     url.searchParams.append("refine", `location:${academy}`);
-    url.searchParams.append("refine", `population:${POPULATION_VALUE}`);
     url.searchParams.set("timezone", "Europe/Paris");
 
     const response = await fetch(url.toString());
@@ -73,11 +72,12 @@ async function fetchVacations(academy: string, logger: Logger): Promise<Vacation
   }
 
   const academyNorm = normalize(academy);
-  const populationNorm = normalize(POPULATION_VALUE);
   const filtered = records.filter((record) => {
-    return (
-      normalize(record.location) === academyNorm && normalize(record.population) === populationNorm
+    const populationNorm = normalize(record.population ?? "");
+    const populationAllowed = POPULATION_VALUES.some(
+      (value) => normalize(value) === populationNorm
     );
+    return normalize(record.location) === academyNorm && populationAllowed;
   });
 
   cache = {

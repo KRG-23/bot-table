@@ -26,8 +26,8 @@
 - [x] Charger config (env validation + valeurs par défaut)
 - [x] Enregistrer slash commands de base (`/health`, `/config show`)
 - [x] Logger structuré (pino/winston) + niveaux + format JSON
-  - [ ] Bloquant : confirmer les permissions OAuth2 nécessaires (scopes + intents)
-  - [ ] Bloquant : valider IDs serveur/canal (test + prod)
+  - [x] Bloquant : confirmer les permissions OAuth2 nécessaires (scopes + intents)
+  - [ ] Différé : définir IDs serveur/canal prod (après validation POC)
 
 ## Phase 3 — Gestion des tables & événements
 
@@ -40,13 +40,13 @@
 
 ## Phase 4 — Collecte des parties
 
-- [ ] Listener messages dans threads (mention bot + 2 joueurs + jeu)
-- [ ] Parsing message + validation (2 mentions, jeu reconnu)
-- [ ] Créer match `en_attente`, refuser doublons (1 match/joueur/jour)
-- [ ] Réponse de confirmation (thread + DM)
-- [ ] Boutons/modales : valider/refuser/annuler
-- [ ] Gestion permissions (admin vs joueur concerné)
-  - [ ] Bloquant : valider le format exact du message (mention bot + 2 joueurs + jeu)
+- [x] Listener messages dans threads (mention bot + 2 joueurs + jeu)
+- [x] Parsing message + validation (2 mentions, jeu reconnu)
+- [x] Créer match `en_attente`, refuser doublons (1 match/joueur/jour)
+- [x] Réponse de confirmation (thread + DM)
+- [x] Boutons/modales : valider/refuser/annuler
+- [x] Gestion permissions (admin vs joueur concerné)
+  - [x] Bloquant : valider le format exact du message (mention bot + 2 joueurs + jeu)
 
 ## Phase 5 — Automatisations hebdo
 

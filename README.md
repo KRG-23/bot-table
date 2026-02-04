@@ -5,9 +5,9 @@
 Munitorum is a Discord bot for tabletop reservations (Warhammer 40k / AoS / Kill Team). It automates table availability, match submissions, validation, and player notifications.
 
 ## Features (current / planned)
-- Slash commands: `/mu_health`, `/mu_config show`, `/mu_tables set|show`
+- Slash commands: `/mu_health`, `/mu_config show`, `/mu_tables set|show`, `/mu_slots generate|delete_date|delete_month`, `/mu_panel`
 - Table capacity management
-- Match submissions + validation (planned)
+- Match submissions + validation/refusal/cancellation
 - Weekly automation (planned)
 - PostgreSQL persistence + backups (planned)
 
@@ -62,6 +62,10 @@ Enable the following **Privileged Gateway Intents** in the Discord Developer Por
 - `/mu_config show` — show current config (safe fields only)
 - `/mu_tables set <date> <count>` — set tables for a Friday (date format `DD/MM/YYYY`)
 - `/mu_tables show <date>` — show tables for a Friday
+- `/mu_slots generate` — create missing Friday slots for the current month
+- `/mu_slots delete_date <date>` — delete a slot and related matches for a specific date
+- `/mu_slots delete_month` — delete all slots and related matches for the current month
+- `/mu_panel` — show admin buttons (health/config/tables/slots)
 
 ## Environment variables
 See `.env.example` for all options.

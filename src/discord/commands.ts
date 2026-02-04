@@ -57,5 +57,40 @@ export const commands = [
         ]
       }
     ]
+  },
+  {
+    name: "mu_slots",
+    description: "Générer les créneaux du mois",
+    type: ApplicationCommandType.ChatInput,
+    options: [
+      {
+        name: "generate",
+        description: "Créer les créneaux manquants du mois en cours",
+        type: ApplicationCommandOptionType.Subcommand
+      },
+      {
+        name: "delete_date",
+        description: "Supprimer un créneau (et ses parties) pour une date précise",
+        type: ApplicationCommandOptionType.Subcommand,
+        options: [
+          {
+            name: "date",
+            description: "Date au format JJ/MM/AAAA",
+            type: ApplicationCommandOptionType.String,
+            required: true
+          }
+        ]
+      },
+      {
+        name: "delete_month",
+        description: "Supprimer tous les créneaux (et parties) du mois en cours",
+        type: ApplicationCommandOptionType.Subcommand
+      }
+    ]
+  },
+  {
+    name: "mu_panel",
+    description: "Afficher le panneau d'administration",
+    type: ApplicationCommandType.ChatInput
   }
 ];

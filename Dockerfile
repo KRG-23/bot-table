@@ -7,7 +7,9 @@ RUN apt-get update -y \
 
 FROM base AS deps
 COPY package*.json ./
+COPY prisma ./prisma
 RUN npm ci
+RUN npm run prisma:generate
 
 FROM deps AS build
 COPY tsconfig.json ./

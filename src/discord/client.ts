@@ -3,7 +3,8 @@ import type { Logger } from "pino";
 
 import type { AppConfig } from "../config";
 
-import { handleInteraction } from "./interactions";
+import { handleButtonInteraction, handleInteraction, handleModalSubmit } from "./interactions";
+import { handleMatchMessage } from "./messages";
 
 export function createClient(config: AppConfig, logger: Logger): Client {
   const instanceId = process.env.HOSTNAME || `local-${process.pid}`;
@@ -30,23 +31,34 @@ export function createClient(config: AppConfig, logger: Logger): Client {
   });
 
   client.on("interactionCreate", async (interaction) => {
-    if (!interaction.isChatInputCommand()) {
-      return;
-    }
-
     const ageMs = Date.now() - interaction.createdTimestamp;
     if (ageMs > 2000) {
-      logger.warn({ ageMs, command: interaction.commandName }, "Interaction received late");
+      logger.warn({ ageMs, type: interaction.type }, "Interaction received late");
     }
 
     try {
-      await handleInteraction(interaction, config, logger);
+      if (interaction.isChatInputCommand()) {
+        await handleInteraction(interaction, config, logger);
+        return;
+      }
+
+      if (interaction.isButton()) {
+        await handleButtonInteraction(interaction, config, logger);
+        return;
+      }
+
+      if (interaction.isModalSubmit()) {
+        await handleModalSubmit(interaction, config, logger);
+      }
     } catch (err) {
-      logger.error(
-        { err, ageMs, command: interaction.commandName },
-        "Failed to handle interaction"
-      );
+      logger.error({ err, ageMs }, "Failed to handle interaction");
     }
+  });
+
+  client.on("messageCreate", (message) => {
+    handleMatchMessage(message, config, logger).catch((err) => {
+      logger.error({ err }, "Failed to handle match message");
+    });
   });
 
   client.on("error", (err) => {
