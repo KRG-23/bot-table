@@ -33,6 +33,28 @@ const GAME_LABELS: Record<GameSystem, string> = {
   [GameSystem.AUTRE]: "Autre"
 };
 
+const THREAD_GAMES: GameSystem[] = [
+  GameSystem.W40K,
+  GameSystem.AOS,
+  GameSystem.KILLTEAM,
+  GameSystem.AUTRE
+];
+
+const FRENCH_MONTHS = [
+  "janvier",
+  "février",
+  "mars",
+  "avril",
+  "mai",
+  "juin",
+  "juillet",
+  "août",
+  "septembre",
+  "octobre",
+  "novembre",
+  "décembre"
+];
+
 function formatConfig(config: AppConfig): string {
   return [
     "```",
@@ -199,7 +221,7 @@ export async function handleButtonInteraction(
   }
 
   if (interaction.customId === "mu_slots:confirm_delete_month") {
-    await handleDeleteMonthConfirm(interaction, config);
+    await handleDeleteMonthConfirm(interaction, config, logger);
     return;
   }
 
@@ -210,7 +232,7 @@ export async function handleButtonInteraction(
       await replyEphemeral(interaction, { content: "❌ Date invalide." });
       return;
     }
-    await handleDeleteDateConfirm(interaction, config, parsedDate);
+    await handleDeleteDateConfirm(interaction, config, logger, parsedDate);
     return;
   }
 
@@ -406,26 +428,29 @@ async function handleTablesSet(
   const closure = await getClosureInfo(parsedDate, config.vacationAcademy, config.timezone, logger);
   const eventDate = parsedDate.toDate();
   const prisma = getPrisma();
-  const tables = closure.closed ? 0 : count;
+  const isClosed = closure.closed || count <= 0;
+  const tables = isClosed ? 0 : count;
 
-  await prisma.event.upsert({
+  const event = await prisma.event.upsert({
     where: { date: eventDate },
     create: {
       date: eventDate,
       tables,
-      status: closure.closed ? "FERME" : "OUVERT",
+      status: isClosed ? "FERME" : "OUVERT",
       isVacation: closure.closed
     },
     update: {
       tables,
-      status: closure.closed ? "FERME" : "OUVERT",
+      status: isClosed ? "FERME" : "OUVERT",
       isVacation: closure.closed
     }
   });
 
   const closureText = closure.closed
     ? `⚠️ ${closure.reason ?? "Fermeture"} (${closure.period?.description ?? "Vacances"})`
-    : "✅ Ouvert";
+    : isClosed
+      ? "⚠️ Fermé (tables à 0)"
+      : "✅ Ouvert";
 
   await interaction.editReply({
     content: [
@@ -435,6 +460,12 @@ async function handleTablesSet(
     ].join("\n"),
     components: [buildTablesRow()]
   });
+
+  if (isClosed) {
+    await closeEventThreads(interaction, logger, event.id);
+  } else {
+    await ensureEventThreads(interaction, config, logger, event);
+  }
 }
 
 async function handleTablesShow(
@@ -469,11 +500,14 @@ async function handleTablesShow(
     return;
   }
 
+  const statusText =
+    event.status === "FERME" ? (event.isVacation ? closureText : "⚠️ Fermé (annulé)") : "✅ Ouvert";
+
   await interaction.editReply({
     content: [
       `📅 ${formatFrenchDate(parsedDate)}`,
       `Tables: ${event.tables}`,
-      `Statut: ${event.status === "FERME" ? closureText : "✅ Ouvert"}`
+      `Statut: ${statusText}`
     ].join("\n"),
     components: [buildTablesRow()]
   });
@@ -497,6 +531,9 @@ async function handleGenerateSlots(
   for (const friday of fridays) {
     const existing = await prisma.event.findUnique({ where: { date: friday.toDate() } });
     if (existing) {
+      if (existing.status === "OUVERT") {
+        await ensureEventThreads(interaction, config, logger, existing);
+      }
       skipped += 1;
       continue;
     }
@@ -507,7 +544,7 @@ async function handleGenerateSlots(
       continue;
     }
 
-    await prisma.event.create({
+    const event = await prisma.event.create({
       data: {
         date: friday.toDate(),
         tables: 0,
@@ -516,6 +553,7 @@ async function handleGenerateSlots(
       }
     });
 
+    await ensureEventThreads(interaction, config, logger, event);
     created += 1;
   }
 
@@ -617,6 +655,7 @@ async function handleDeleteMonthRequest(
 async function handleDeleteDateConfirm(
   interaction: EphemeralInteraction,
   config: AppConfig,
+  logger: Logger,
   date: dayjs.Dayjs
 ): Promise<void> {
   if (!(await ensureAdmin(interaction, config))) {
@@ -637,15 +676,25 @@ async function handleDeleteDateConfirm(
     where: { eventId: event.id },
     select: { id: true }
   });
+  const threads = await prisma.eventThread.findMany({
+    where: { eventId: event.id },
+    select: { threadId: true }
+  });
 
   await prisma.$transaction([
     prisma.notification.deleteMany({
       where: { matchId: { in: matchIds.map((match) => match.id) } }
     }),
     prisma.match.deleteMany({ where: { eventId: event.id } }),
+    prisma.eventThread.deleteMany({ where: { eventId: event.id } }),
     prisma.event.delete({ where: { id: event.id } })
   ]);
 
+  await closeThreadsByIds(
+    interaction,
+    logger,
+    threads.map((thread) => thread.threadId)
+  );
   await replyEphemeral(interaction, {
     content: `🗑️ Créneau du ${formatFrenchDate(date)} supprimé (parties et notifications incluses).`
   });
@@ -653,7 +702,8 @@ async function handleDeleteDateConfirm(
 
 async function handleDeleteMonthConfirm(
   interaction: EphemeralInteraction,
-  config: AppConfig
+  config: AppConfig,
+  logger: Logger
 ): Promise<void> {
   if (!(await ensureAdmin(interaction, config))) {
     return;
@@ -685,15 +735,25 @@ async function handleDeleteMonthConfirm(
     where: { eventId: { in: eventIds } },
     select: { id: true }
   });
+  const threads = await prisma.eventThread.findMany({
+    where: { eventId: { in: eventIds } },
+    select: { threadId: true }
+  });
 
   await prisma.$transaction([
     prisma.notification.deleteMany({
       where: { matchId: { in: matchIds.map((match) => match.id) } }
     }),
     prisma.match.deleteMany({ where: { eventId: { in: eventIds } } }),
+    prisma.eventThread.deleteMany({ where: { eventId: { in: eventIds } } }),
     prisma.event.deleteMany({ where: { id: { in: eventIds } } })
   ]);
 
+  await closeThreadsByIds(
+    interaction,
+    logger,
+    threads.map((thread) => thread.threadId)
+  );
   await replyEphemeral(interaction, {
     content: `🗑️ Créneaux du mois ${now.format("MM/YYYY")} supprimés (parties et notifications incluses).`
   });
@@ -1005,6 +1065,151 @@ function buildMatchSummary(
   const eventDate = dayjs(match.event.date).tz(config.timezone);
   const gameLabel = GAME_LABELS[match.gameSystem];
   return `${formatFrenchDate(eventDate)} — <@${match.player1.discordId}> vs <@${match.player2.discordId}> (${gameLabel})`;
+}
+
+function formatThreadDayMonth(date: dayjs.Dayjs): string {
+  const month = FRENCH_MONTHS[date.month()] ?? date.format("MMMM");
+  return `${date.date()} ${month}`;
+}
+
+function buildThreadName(game: GameSystem, date: dayjs.Dayjs): string {
+  return `Soirée ${GAME_LABELS[game]} le ${formatThreadDayMonth(date)}`;
+}
+
+type SendableChannel = {
+  send: (payload: { content: string }) => Promise<unknown>;
+  isThread?: () => boolean;
+};
+
+type ThreadStarterMessage = {
+  startThread: (options: { name: string; autoArchiveDuration?: number }) => Promise<{ id: string }>;
+};
+
+function isSendableChannel(channel: unknown): channel is SendableChannel {
+  if (!channel || typeof channel !== "object") {
+    return false;
+  }
+
+  return "send" in channel && typeof (channel as SendableChannel).send === "function";
+}
+
+function isThreadStarterMessage(message: unknown): message is ThreadStarterMessage {
+  if (!message || typeof message !== "object") {
+    return false;
+  }
+
+  return (
+    "startThread" in message && typeof (message as ThreadStarterMessage).startThread === "function"
+  );
+}
+
+async function ensureEventThreads(
+  interaction: EphemeralInteraction,
+  config: AppConfig,
+  logger: Logger,
+  event: { id: number; date: Date }
+): Promise<void> {
+  const prisma = getPrisma();
+  const channel = await interaction.client.channels.fetch(config.discordChannelId);
+
+  if (!isSendableChannel(channel)) {
+    logger.warn({ channelId: config.discordChannelId }, "Channel not found or not sendable");
+    return;
+  }
+
+  if (channel.isThread?.()) {
+    logger.warn({ channelId: config.discordChannelId }, "Configured channel is a thread");
+    return;
+  }
+
+  const existing = await prisma.eventThread.findMany({ where: { eventId: event.id } });
+  const existingGames = new Set(existing.map((thread) => thread.gameSystem));
+  const eventDate = dayjs(event.date).tz(config.timezone);
+
+  for (const game of THREAD_GAMES) {
+    if (existingGames.has(game)) {
+      continue;
+    }
+
+    const gameLabel = GAME_LABELS[game];
+    const threadName = buildThreadName(game, eventDate);
+    const starterContent = `Créneau ${gameLabel} — ${formatFrenchDate(eventDate)}.`;
+
+    try {
+      const starter = await channel.send({ content: starterContent });
+      if (!isThreadStarterMessage(starter)) {
+        logger.warn({ eventId: event.id }, "Starter message does not support threads");
+        continue;
+      }
+
+      const thread = await starter.startThread({
+        name: threadName,
+        autoArchiveDuration: 10080
+      });
+
+      await prisma.eventThread.create({
+        data: {
+          eventId: event.id,
+          gameSystem: game,
+          threadId: thread.id
+        }
+      });
+    } catch (err) {
+      logger.warn({ err, game, eventId: event.id }, "Failed to create thread");
+    }
+  }
+}
+
+async function closeEventThreads(
+  interaction: EphemeralInteraction,
+  logger: Logger,
+  eventId: number
+): Promise<void> {
+  const prisma = getPrisma();
+  const threads = await prisma.eventThread.findMany({
+    where: { eventId },
+    select: { threadId: true }
+  });
+
+  if (threads.length === 0) {
+    return;
+  }
+
+  await prisma.eventThread.deleteMany({ where: { eventId } });
+  await closeThreadsByIds(
+    interaction,
+    logger,
+    threads.map((thread) => thread.threadId)
+  );
+}
+
+async function closeThreadsByIds(
+  interaction: EphemeralInteraction,
+  logger: Logger,
+  threadIds: string[]
+): Promise<void> {
+  for (const threadId of threadIds) {
+    try {
+      const channel = await interaction.client.channels.fetch(threadId);
+      if (!channel || !("isThread" in channel) || !channel.isThread()) {
+        continue;
+      }
+
+      try {
+        await channel.setArchived(true);
+      } catch (err) {
+        logger.warn({ err, threadId }, "Failed to archive thread");
+      }
+
+      try {
+        await channel.delete("Soirée annulée");
+      } catch (err) {
+        logger.warn({ err, threadId }, "Failed to delete thread");
+      }
+    } catch (err) {
+      logger.warn({ err, threadId }, "Failed to fetch thread");
+    }
+  }
 }
 
 async function handleMatchValidate(

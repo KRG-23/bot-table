@@ -7,6 +7,7 @@ Munitorum is a Discord bot for tabletop reservations (Warhammer 40k / AoS / Kill
 ## Features (current / planned)
 - Slash commands: `/mu_health`, `/mu_config show`, `/mu_tables set|show`, `/mu_slots generate|delete_date|delete_month`, `/mu_panel`
 - Table capacity management
+- Auto thread creation per game when a slot is created (and cleanup on cancellation)
 - Match submissions + validation/refusal/cancellation
 - Weekly automation (planned)
 - PostgreSQL persistence + backups (planned)
@@ -41,6 +42,7 @@ docker compose --env-file .env.dev run --rm bot npm run prisma:migrate
 ```bash
 docker compose --env-file .env.dev up bot
 ```
+This will run `prisma generate` on startup to keep the client in sync.
 
 ### TLS note (DEV only)
 If your network uses TLS inspection (self-signed certs), local dev may fail with
@@ -51,6 +53,38 @@ ALLOW_INSECURE_TLS=true
 NODE_TLS_REJECT_UNAUTHORIZED=0
 ```
 Never use this in production. For PROD, install the proper root CA.
+
+### DNS note (DEV only)
+If the bot fails to reach Discord with `EAI_AGAIN discord.com`, Docker’s internal
+DNS resolver may be failing. Two quick fixes:
+
+Option A (preferred): force TCP DNS inside Docker.
+Add to `docker-compose.yml` under the `bot` service:
+```
+dns_opt:
+  - use-vc
+  - timeout:1
+  - attempts:3
+```
+Then recreate:
+```
+docker compose --env-file .env.dev up -d --force-recreate bot
+```
+
+Option B (fast workaround): use host networking.
+Set in `docker-compose.yml`:
+```
+network_mode: host
+```
+Update `.env.dev` to use localhost for Postgres:
+```
+PGHOST=localhost
+DATABASE_URL=postgresql://munitorum_dbuser:munitorum_dbpassword@localhost:5433/munitorum_dbname
+```
+Then recreate:
+```
+docker compose --env-file .env.dev up -d --force-recreate bot
+```
 
 ## Discord configuration
 Enable the following **Privileged Gateway Intents** in the Discord Developer Portal:

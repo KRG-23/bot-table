@@ -1,6 +1,8 @@
 services:
   bot:
-    build: .
+    build:
+      context: .
+      target: deps
     env_file:
       - .env.dev
     dns:
@@ -11,7 +13,7 @@ services:
         condition: service_healthy
     volumes:
       - ./:/usr/src/app
-    command: npm run dev
+    command: sh -c "npm run prisma:generate && npm run dev"
     restart: unless-stopped
 
   postgres:

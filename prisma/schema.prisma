@@ -52,6 +52,7 @@ model Event {
   updatedAt   DateTime     @updatedAt
 
   matches     Match[]
+  threads     EventThread[]
 
   @@index([date])
 }
@@ -87,6 +88,18 @@ model Notification {
   sentAt    DateTime         @default(now())
   success   Boolean
   error     String?
+}
+
+model EventThread {
+  id         Int        @id @default(autoincrement())
+  event      Event      @relation(fields: [eventId], references: [id])
+  eventId    Int
+  gameSystem GameSystem
+  threadId   String
+  createdAt  DateTime   @default(now())
+
+  @@unique([eventId, gameSystem])
+  @@index([threadId])
 }
 
 model Setting {
