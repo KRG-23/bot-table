@@ -4,6 +4,8 @@ import { ButtonStyle, MessageFlags, TextInputStyle } from "discord.js";
 import type {
   ButtonInteraction,
   ChatInputCommandInteraction,
+  InteractionReplyOptions,
+  InteractionUpdateOptions,
   ModalSubmitInteraction,
   StringSelectMenuInteraction
 } from "discord.js";
@@ -35,10 +37,7 @@ type PublicInteraction =
   | ButtonInteraction
   | StringSelectMenuInteraction;
 
-type ReplyPayload = {
-  content: string;
-  components?: unknown[];
-};
+type ReplyPayload = Pick<InteractionReplyOptions, "content" | "components">;
 
 type ModalPayload = Parameters<ButtonInteraction["showModal"]>[0];
 const GAME_LABELS: Record<GameSystem, string> = {
@@ -382,15 +381,17 @@ export async function handleSelectMenuInteraction(
 
   const selection = interaction.values[0] as ConfigCategory | undefined;
   if (!selection || !CONFIG_CATEGORIES.some((category) => category.value === selection)) {
-    await interaction.update({
-      content: "❌ Catégorie inconnue.",
-      components: [buildConfigMenuSelect()]
-    } as unknown as Parameters<typeof interaction.update>[0]);
+    await interaction.update(
+      toUpdatePayload({
+        content: "❌ Catégorie inconnue.",
+        components: [buildConfigMenuSelect()]
+      })
+    );
     return;
   }
 
   const payload = await buildConfigCategoryResponse(selection, config, logger);
-  await interaction.update(payload as unknown as Parameters<typeof interaction.update>[0]);
+  await interaction.update(toUpdatePayload(payload));
 }
 
 export async function handleModalSubmit(
@@ -1211,14 +1212,14 @@ async function replyEphemeral(
   payload: ReplyPayload
 ): Promise<void> {
   if (interaction.deferred || interaction.replied) {
-    await interaction.editReply(payload as unknown as Parameters<typeof interaction.editReply>[0]);
+    await interaction.editReply(toInteractionPayload(payload));
     return;
   }
 
   await interaction.reply({
-    ...payload,
+    ...toInteractionPayload(payload),
     flags: MessageFlags.Ephemeral
-  } as unknown as Parameters<typeof interaction.reply>[0]);
+  });
 }
 
 async function replyPublic(
@@ -1226,18 +1227,29 @@ async function replyPublic(
   payload: ReplyPayload
 ): Promise<Message> {
   if ("replied" in interaction && (interaction.replied || interaction.deferred)) {
-    const message = await interaction.editReply(
-      payload as unknown as Parameters<typeof interaction.editReply>[0]
-    );
+    await interaction.editReply(toInteractionPayload(payload));
+    const message = await interaction.fetchReply();
     return message as Message;
   }
 
-  const message = await interaction.reply({
-    ...(payload as unknown as Parameters<typeof interaction.reply>[0]),
-    fetchReply: true
-  });
+  await interaction.reply(toInteractionPayload(payload));
 
+  const message = await interaction.fetchReply();
   return message as Message;
+}
+
+function toInteractionPayload(payload: ReplyPayload): InteractionReplyOptions {
+  return {
+    content: payload.content,
+    components: payload.components
+  };
+}
+
+function toUpdatePayload(payload: ReplyPayload): InteractionUpdateOptions {
+  return {
+    content: payload.content,
+    components: payload.components
+  };
 }
 
 function scheduleConfigMenuExpiry(message: Message, logger: Logger): void {
