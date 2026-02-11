@@ -824,25 +824,31 @@ async function handleConfigMenu(
   }
 
   let acknowledged = false;
-  if ("deferred" in interaction && !interaction.deferred && !interaction.replied) {
+  if ("replied" in interaction && interaction.replied) {
+    acknowledged = true;
+  } else if ("deferred" in interaction && interaction.deferred) {
+    acknowledged = true;
+  } else {
     try {
-      await interaction.deferReply();
+      await interaction.reply({ content: "Menu en cours de chargement…" });
       acknowledged = true;
     } catch (err) {
-      logger.warn({ err }, "Failed to defer config menu interaction");
+      logger.warn({ err }, "Failed to reply loading message for config menu");
     }
-  } else if ("replied" in interaction && interaction.replied) {
-    acknowledged = true;
   }
 
   const content = await buildConfigMenuContent(config, logger);
   const components = [buildConfigMenuSelect()];
 
   if (acknowledged) {
-    await interaction.editReply(toEditPayload({ content, components }));
-    const message = await interaction.fetchReply();
-    scheduleConfigMenuExpiry(message as Message, logger);
-    return;
+    try {
+      await interaction.editReply(toEditPayload({ content, components }));
+      const message = await interaction.fetchReply();
+      scheduleConfigMenuExpiry(message as Message, logger);
+      return;
+    } catch (err) {
+      logger.warn({ err }, "Failed to edit config menu reply");
+    }
   }
 
   if (interaction.channel?.isTextBased()) {
