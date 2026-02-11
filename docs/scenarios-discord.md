@@ -28,4 +28,5 @@ Objectif : s'assurer qu'un admin peut tout faire via les commandes **ou** via l'
 ## Notes
 
 - Le menu `/mu_config` est public, mais les actions admin restent protégées par rôle.
+- L’onglet “Accueil” propose le choix de langue et un tableau des créneaux enregistrés, avec un rappel des paramètres de base en citation.
 - Les jeux sont configurés dynamiquement et chaque jeu doit avoir un canal associé.

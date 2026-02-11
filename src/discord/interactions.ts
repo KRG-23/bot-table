@@ -302,6 +302,42 @@ export async function handleButtonInteraction(
     return;
   }
 
+  if (interaction.customId.startsWith("mu_lang:set:")) {
+    if (!(await ensureAdmin(interaction, config))) {
+      return;
+    }
+
+    const language = normalizeLanguage(interaction.customId.replace("mu_lang:set:", ""));
+    const prisma = getPrisma();
+
+    let deferred = false;
+    try {
+      await interaction.deferUpdate();
+      deferred = true;
+    } catch (err) {
+      logger.warn({ err }, "Failed to defer language update");
+    }
+
+    await setBotLanguage(prisma, language);
+    const payload = await buildConfigCategoryResponse("home", config, logger);
+
+    if (deferred) {
+      await interaction.editReply(toEditPayload(payload));
+      scheduleConfigMenuExpiry(interaction.message as Message, logger);
+      return;
+    }
+
+    if (interaction.channel?.isTextBased()) {
+      const message = await interaction.channel.send({
+        content: payload.content,
+        components: payload.components as ReplyComponents
+      });
+      scheduleConfigMenuExpiry(message, logger);
+    }
+
+    return;
+  }
+
   if (interaction.customId === "mu_match:panel") {
     const panel = buildMatchPanel();
     await replyEphemeral(interaction, panel);
@@ -837,12 +873,11 @@ async function handleConfigMenu(
     }
   }
 
-  const content = await buildConfigMenuContent(config, logger);
-  const components = [buildConfigMenuSelect()];
+  const payload = await buildConfigCategoryResponse("home", config, logger);
 
   if (acknowledged) {
     try {
-      await interaction.editReply(toEditPayload({ content, components }));
+      await interaction.editReply(toEditPayload(payload));
       const message = await interaction.fetchReply();
       scheduleConfigMenuExpiry(message as Message, logger);
       return;
@@ -852,7 +887,10 @@ async function handleConfigMenu(
   }
 
   if (interaction.channel?.isTextBased()) {
-    const message = await interaction.channel.send({ content, components });
+    const message = await interaction.channel.send({
+      content: payload.content,
+      components: payload.components as ReplyComponents
+    });
     scheduleConfigMenuExpiry(message, logger);
   }
 }
@@ -1737,10 +1775,7 @@ function scheduleConfigMenuExpiry(message: Message, logger: Logger): void {
   setTimeout(async () => {
     try {
       const refreshed = await message.fetch();
-      const content = [refreshed.content, "", "💡 Les 60 secondes sont écoulées !"]
-        .filter(Boolean)
-        .join("\n");
-      await refreshed.edit({ content, components: [] });
+      await refreshed.edit({ content: "💡 Les 60 secondes sont écoulées !", components: [] });
     } catch (err) {
       logger.warn({ err }, "Failed to expire config menu");
     }
@@ -1829,9 +1864,10 @@ function buildSlotsRow() {
   };
 }
 
-type ConfigCategory = "slots" | "matches" | "tables";
+type ConfigCategory = "home" | "slots" | "matches" | "tables";
 
 const CONFIG_CATEGORIES: { value: ConfigCategory; label: string; description: string }[] = [
+  { value: "home", label: "Accueil", description: "Vue d'ensemble" },
   { value: "slots", label: "Créneaux", description: "Gérer les créneaux" },
   { value: "matches", label: "Parties", description: "Gérer les parties" },
   { value: "tables", label: "Tables", description: "Gérer les tables" }
@@ -1860,6 +1896,28 @@ function buildConfigMenuSelect(selected?: ConfigCategory) {
 
 function buildConfigCategoryContent(title: string, extra?: string) {
   return [title, "Que souhaitez-vous configurer ?", extra].filter(Boolean).join("\n");
+}
+
+function buildLanguageRow(current: BotLanguage): ReplyComponentRow {
+  return {
+    type: 1,
+    components: [
+      {
+        type: 2,
+        custom_id: "mu_lang:set:fr",
+        label: "Français",
+        style: ButtonStyle.Primary,
+        disabled: current === "fr"
+      },
+      {
+        type: 2,
+        custom_id: "mu_lang:set:en",
+        label: "English",
+        style: ButtonStyle.Secondary,
+        disabled: current === "en"
+      }
+    ]
+  } as ReplyComponentRow;
 }
 
 function buildSlotsCategoryRows() {
@@ -1973,6 +2031,36 @@ type GameConfigState = {
   channelId?: string;
   notice?: string;
 };
+
+type BotLanguage = "fr" | "en";
+const LANGUAGE_SETTING = "bot_language";
+
+function normalizeLanguage(input?: string | null): BotLanguage {
+  if (input === "en") {
+    return "en";
+  }
+  return "fr";
+}
+
+function formatLanguageLabel(language: BotLanguage): string {
+  return language === "en" ? "English" : "Français";
+}
+
+async function getBotLanguage(prisma: ReturnType<typeof getPrisma>): Promise<BotLanguage> {
+  const setting = await prisma.setting.findUnique({ where: { key: LANGUAGE_SETTING } });
+  return normalizeLanguage(setting?.value);
+}
+
+async function setBotLanguage(
+  prisma: ReturnType<typeof getPrisma>,
+  language: BotLanguage
+): Promise<void> {
+  await prisma.setting.upsert({
+    where: { key: LANGUAGE_SETTING },
+    update: { value: language },
+    create: { key: LANGUAGE_SETTING, value: language }
+  });
+}
 
 function formatGameStatus(game: Game): string {
   return game.active ? "actif" : "désactivé";
@@ -2203,27 +2291,34 @@ function formatGamesInline(games: Game[]): string {
   return games.map((game) => game.label).join(", ");
 }
 
-async function buildConfigMenuContent(config: AppConfig, logger: Logger): Promise<string> {
+async function buildConfigMenuContent(config: AppConfig): Promise<string> {
   const prisma = getPrisma();
   const slotDays = await getSlotDays(prisma);
   const games = await listActiveGames(prisma);
+  const language = await getBotLanguage(prisma);
   const now = dayjs().tz(config.timezone);
   const offset = now.format("Z");
-  const slotsOverview = await buildMonthSlotsOverview(config, logger, slotDays);
+  const slotsTable = await buildRegisteredSlotsTable(config);
 
-  return [
-    "**Configuration**",
-    "Bienvenue dans la commande de configuration de @Munitorum.",
-    "Grâce à cette commande, vous pouvez configurer les différents modules via le sélecteur ci-dessous.",
-    "",
+  const baseLines = [
     "Paramètres de base :",
-    "Langue : Français",
+    `Langue : ${formatLanguageLabel(language)}`,
     `Fuseau horaire : (UTC${offset}) ${config.timezone}`,
     `Jours des créneaux : ${formatSlotDays(slotDays)}`,
-    `Jeux actifs : ${formatGamesInline(games)}`,
+    `Jeux actifs : ${formatGamesInline(games)}`
+  ];
+
+  const baseQuote = baseLines.map((line) => `> ${line}`).join("\n");
+
+  return [
+    "**Accueil**",
+    "Bienvenue dans la commande de configuration de @Munitorum.",
+    "Choisis une catégorie ci-dessous ou règle la langue du bot.",
     "",
-    `Créneaux du mois (${formatFrenchMonthYear(now)})`,
-    slotsOverview
+    baseQuote,
+    "",
+    `Créneaux enregistrés (${formatFrenchMonthYear(now)})`,
+    slotsTable
   ].join("\n");
 }
 
@@ -2232,6 +2327,17 @@ async function buildConfigCategoryResponse(
   config: AppConfig,
   logger: Logger
 ): Promise<ReplyPayload> {
+  if (category === "home") {
+    const prisma = getPrisma();
+    const language = await getBotLanguage(prisma);
+    const content = await buildConfigMenuContent(config);
+
+    return {
+      content,
+      components: [buildConfigMenuSelect("home"), buildLanguageRow(language)]
+    };
+  }
+
   if (category === "slots") {
     const prisma = getPrisma();
     const slotDays = await getSlotDays(prisma);
@@ -2262,6 +2368,42 @@ async function buildConfigCategoryResponse(
     content: buildConfigCategoryContent("**Tables**"),
     components: [buildConfigMenuSelect("tables"), ...buildTablesCategoryRows()]
   };
+}
+
+async function buildRegisteredSlotsTable(config: AppConfig): Promise<string> {
+  const prisma = getPrisma();
+  const now = dayjs().tz(config.timezone);
+  const monthStart = now.startOf("month").startOf("day");
+  const monthEnd = now.endOf("month").endOf("day");
+
+  const events = await prisma.event.findMany({
+    where: {
+      date: {
+        gte: monthStart.toDate(),
+        lte: monthEnd.toDate()
+      }
+    },
+    orderBy: { date: "asc" }
+  });
+
+  if (events.length === 0) {
+    return "Aucun créneau enregistré.";
+  }
+
+  const rows = events.map((event) => {
+    const date = dayjs(event.date).tz(config.timezone);
+    return `| ${formatFrenchDate(date)} | ${event.tables} | ${formatEventStatus(event)} |`;
+  });
+
+  return ["| Date | Tables | Statut |", "| --- | --- | --- |", ...rows].join("\n");
+}
+
+function formatEventStatus(event: { status: string; tables: number; isVacation: boolean }): string {
+  if (event.status === "OUVERT") {
+    return event.tables > 0 ? "Disponible" : "Ouvert";
+  }
+
+  return event.isVacation ? "Fermé (vacances)" : "Fermé";
 }
 
 async function buildMonthSlotsOverview(

@@ -95,7 +95,7 @@ Enable the following **Privileged Gateway Intents** in the Discord Developer Por
 
 ## Commands
 - `/mu_health` — check bot status
-- `/mu_config` — open the public configuration menu (expires 60s after the last interaction)
+- `/mu_config` — open the public configuration menu (expires 60s after the last interaction, then replaced with a timeout message)
 - `/mu_tables set <date> <count>` — set tables for a Friday (date format `DD/MM/YYYY`)
 - `/mu_tables show <date>` — show tables for a Friday
 - `/mu_slots generate` — create missing Friday slots for the current month
@@ -113,7 +113,7 @@ Enable the following **Privileged Gateway Intents** in the Discord Developer Por
 - `/mu_games disable <game>` — disable a game
 - `/mu_games enable <game>` — enable a game
 
-The `/mu_config` menu also lets admins configure slot days (multiple weekdays), manage games + channels, and provides category buttons for slots, matches, and tables. New games created from the menu default to `DISCORD_CHANNEL_ID` until reassigned.
+The `/mu_config` menu starts on “Accueil” with a language selector and a table of recorded slots. A base settings reminder appears as a quote block. Admins can configure slot days (multiple weekdays), manage games + channels, and use category buttons for slots, matches, and tables. New games created from the menu default to `DISCORD_CHANNEL_ID` until reassigned.
 
 ## Scenarios (slash + buttons parity)
 All core actions have both a slash command and a button/modals path:
