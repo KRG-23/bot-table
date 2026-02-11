@@ -4,6 +4,7 @@ import { ButtonStyle, MessageFlags, TextInputStyle } from "discord.js";
 import type {
   ButtonInteraction,
   ChatInputCommandInteraction,
+  InteractionEditReplyOptions,
   InteractionReplyOptions,
   InteractionUpdateOptions,
   ModalSubmitInteraction,
@@ -37,7 +38,10 @@ type PublicInteraction =
   | ButtonInteraction
   | StringSelectMenuInteraction;
 
-type ReplyPayload = Pick<InteractionReplyOptions, "content" | "components">;
+type ReplyPayload = {
+  content: string;
+  components?: unknown[];
+};
 
 type ModalPayload = Parameters<ButtonInteraction["showModal"]>[0];
 const GAME_LABELS: Record<GameSystem, string> = {
@@ -1212,12 +1216,13 @@ async function replyEphemeral(
   payload: ReplyPayload
 ): Promise<void> {
   if (interaction.deferred || interaction.replied) {
-    await interaction.editReply(toInteractionPayload(payload));
+    await interaction.editReply(toEditPayload(payload));
     return;
   }
 
   await interaction.reply({
-    ...toInteractionPayload(payload),
+    content: payload.content,
+    components: payload.components as InteractionReplyOptions["components"],
     flags: MessageFlags.Ephemeral
   });
 }
@@ -1227,28 +1232,35 @@ async function replyPublic(
   payload: ReplyPayload
 ): Promise<Message> {
   if ("replied" in interaction && (interaction.replied || interaction.deferred)) {
-    await interaction.editReply(toInteractionPayload(payload));
+    await interaction.editReply(toEditPayload(payload));
     const message = await interaction.fetchReply();
     return message as Message;
   }
 
-  await interaction.reply(toInteractionPayload(payload));
+  await interaction.reply(toReplyPayload(payload));
 
   const message = await interaction.fetchReply();
   return message as Message;
 }
 
-function toInteractionPayload(payload: ReplyPayload): InteractionReplyOptions {
+function toReplyPayload(payload: ReplyPayload): InteractionReplyOptions {
   return {
     content: payload.content,
-    components: payload.components
+    components: payload.components as InteractionReplyOptions["components"]
+  };
+}
+
+function toEditPayload(payload: ReplyPayload): InteractionEditReplyOptions {
+  return {
+    content: payload.content,
+    components: payload.components as InteractionEditReplyOptions["components"]
   };
 }
 
 function toUpdatePayload(payload: ReplyPayload): InteractionUpdateOptions {
   return {
     content: payload.content,
-    components: payload.components
+    components: payload.components as InteractionUpdateOptions["components"]
   };
 }
 
