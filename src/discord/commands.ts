@@ -92,5 +92,141 @@ export const commands = [
     name: "mu_panel",
     description: "Afficher le panneau d'administration",
     type: ApplicationCommandType.ChatInput
+  },
+  {
+    name: "mu_match",
+    description: "Gérer une partie",
+    type: ApplicationCommandType.ChatInput,
+    options: [
+      {
+        name: "panel",
+        description: "Afficher le panneau de gestion des parties",
+        type: ApplicationCommandOptionType.Subcommand
+      },
+      {
+        name: "create",
+        description: "Créer une partie",
+        type: ApplicationCommandOptionType.Subcommand,
+        options: [
+          {
+            name: "date",
+            description: "Date au format JJ/MM/AAAA",
+            type: ApplicationCommandOptionType.String,
+            required: true
+          },
+          {
+            name: "player1",
+            description: "Premier joueur",
+            type: ApplicationCommandOptionType.User,
+            required: true
+          },
+          {
+            name: "player2",
+            description: "Second joueur",
+            type: ApplicationCommandOptionType.User,
+            required: true
+          },
+          {
+            name: "game",
+            description: "Jeu",
+            type: ApplicationCommandOptionType.String,
+            required: true,
+            choices: [
+              { name: "Warhammer 40k", value: "W40K" },
+              { name: "Age of Sigmar", value: "AOS" },
+              { name: "Kill Team", value: "KILLTEAM" },
+              { name: "Autre", value: "AUTRE" }
+            ]
+          }
+        ]
+      },
+      {
+        name: "validate",
+        description: "Valider une partie",
+        type: ApplicationCommandOptionType.Subcommand,
+        options: [
+          {
+            name: "date",
+            description: "Date au format JJ/MM/AAAA",
+            type: ApplicationCommandOptionType.String,
+            required: true
+          },
+          {
+            name: "player1",
+            description: "Premier joueur",
+            type: ApplicationCommandOptionType.User,
+            required: true
+          },
+          {
+            name: "player2",
+            description: "Second joueur",
+            type: ApplicationCommandOptionType.User,
+            required: true
+          }
+        ]
+      },
+      {
+        name: "refuse",
+        description: "Refuser une partie",
+        type: ApplicationCommandOptionType.Subcommand,
+        options: [
+          {
+            name: "date",
+            description: "Date au format JJ/MM/AAAA",
+            type: ApplicationCommandOptionType.String,
+            required: true
+          },
+          {
+            name: "player1",
+            description: "Premier joueur",
+            type: ApplicationCommandOptionType.User,
+            required: true
+          },
+          {
+            name: "player2",
+            description: "Second joueur",
+            type: ApplicationCommandOptionType.User,
+            required: true
+          },
+          {
+            name: "reason",
+            description: "Raison du refus (optionnel)",
+            type: ApplicationCommandOptionType.String,
+            required: false
+          }
+        ]
+      },
+      {
+        name: "cancel",
+        description: "Annuler une partie",
+        type: ApplicationCommandOptionType.Subcommand,
+        options: [
+          {
+            name: "date",
+            description: "Date au format JJ/MM/AAAA",
+            type: ApplicationCommandOptionType.String,
+            required: true
+          },
+          {
+            name: "player1",
+            description: "Premier joueur",
+            type: ApplicationCommandOptionType.User,
+            required: true
+          },
+          {
+            name: "player2",
+            description: "Second joueur",
+            type: ApplicationCommandOptionType.User,
+            required: true
+          },
+          {
+            name: "reason",
+            description: "Raison de l'annulation (optionnel)",
+            type: ApplicationCommandOptionType.String,
+            required: false
+          }
+        ]
+      }
+    ]
   }
 ];

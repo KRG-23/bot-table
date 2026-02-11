@@ -8,7 +8,7 @@ Munitorum is a Discord bot for tabletop reservations (Warhammer 40k / AoS / Kill
 - Slash commands: `/mu_health`, `/mu_config show`, `/mu_tables set|show`, `/mu_slots generate|delete_date|delete_month`, `/mu_panel`
 - Table capacity management
 - Auto thread creation per game when a slot is created (and cleanup on cancellation)
-- Match submissions + validation/refusal/cancellation
+- Match submissions + validation/refusal/cancellation (buttons + `/mu_match`)
 - Weekly automation (planned)
 - PostgreSQL persistence + backups (planned)
 
@@ -100,6 +100,18 @@ Enable the following **Privileged Gateway Intents** in the Discord Developer Por
 - `/mu_slots delete_date <date>` — delete a slot and related matches for a specific date
 - `/mu_slots delete_month` — delete all slots and related matches for the current month
 - `/mu_panel` — show admin buttons (health/config/tables/slots)
+- `/mu_match panel` — show match management panel
+- `/mu_match create <date> <player1> <player2> <game>` — create a match
+- `/mu_match validate <date> <player1> <player2>` — validate a match
+- `/mu_match refuse <date> <player1> <player2> [reason]` — refuse a match
+- `/mu_match cancel <date> <player1> <player2> [reason]` — cancel a match (admin or player)
+
+## Scenarios (slash + buttons parity)
+All core actions have both a slash command and a button/modals path:
+- Health + config: `/mu_health`, `/mu_config show` or their buttons
+- Tables + slots: `/mu_tables`, `/mu_slots` or their buttons/modals
+- Match creation: `/mu_match create` or match panel button (modal)
+- Match validate/refuse/cancel: `/mu_match validate|refuse|cancel` or match buttons
 
 ## Environment variables
 See `.env.example` for all options.

@@ -33,6 +33,21 @@ const GAME_LABELS: Record<GameSystem, string> = {
   [GameSystem.AUTRE]: "Autre"
 };
 
+const GAME_ALIASES = new Map<string, GameSystem>([
+  ["40k", GameSystem.W40K],
+  ["w40k", GameSystem.W40K],
+  ["wh40k", GameSystem.W40K],
+  ["warhammer 40k", GameSystem.W40K],
+  ["warhammer 40000", GameSystem.W40K],
+  ["aos", GameSystem.AOS],
+  ["age of sigmar", GameSystem.AOS],
+  ["kill team", GameSystem.KILLTEAM],
+  ["killteam", GameSystem.KILLTEAM],
+  ["kt", GameSystem.KILLTEAM],
+  ["autre", GameSystem.AUTRE],
+  ["other", GameSystem.AUTRE]
+]);
+
 const THREAD_GAMES: GameSystem[] = [
   GameSystem.W40K,
   GameSystem.AOS,
@@ -167,6 +182,66 @@ export async function handleInteraction(
     }
   }
 
+  if (interaction.commandName === "mu_match") {
+    if (!interaction.inGuild()) {
+      await replyEphemeral(interaction, { content: "Commande réservée au serveur." });
+      return;
+    }
+
+    const subcommand = interaction.options.getSubcommand();
+
+    if (subcommand === "panel") {
+      const panel = buildMatchPanel();
+      await replyEphemeral(interaction, panel);
+      return;
+    }
+
+    if (subcommand === "create") {
+      const dateInput = interaction.options.getString("date", true);
+      const player1 = interaction.options.getUser("player1", true);
+      const player2 = interaction.options.getUser("player2", true);
+      const gameInput = interaction.options.getString("game", true);
+
+      await handleMatchCreate(interaction, config, logger, {
+        dateInput,
+        player1Id: player1.id,
+        player2Id: player2.id,
+        gameInput
+      });
+      return;
+    }
+
+    const dateInput = interaction.options.getString("date", true);
+    const player1 = interaction.options.getUser("player1", true);
+    const player2 = interaction.options.getUser("player2", true);
+    const reason = interaction.options.getString("reason")?.trim() ?? "";
+
+    const match = await findMatchForAction(interaction, config, {
+      dateInput,
+      player1Id: player1.id,
+      player2Id: player2.id
+    });
+
+    if (!match) {
+      return;
+    }
+
+    if (subcommand === "validate") {
+      await performMatchValidate(interaction, config, logger, match.id, false);
+      return;
+    }
+
+    if (subcommand === "refuse") {
+      await performMatchRefuse(interaction, config, logger, match.id, reason);
+      return;
+    }
+
+    if (subcommand === "cancel") {
+      await performMatchCancel(interaction, config, logger, match.id, reason);
+      return;
+    }
+  }
+
   if (interaction.commandName === "mu_panel") {
     if (!interaction.inGuild()) {
       await replyEphemeral(interaction, { content: "Commande réservée au serveur." });
@@ -197,6 +272,27 @@ export async function handleButtonInteraction(
 
   if (interaction.customId === "mu_config:show") {
     await handleConfigShow(interaction, config);
+    return;
+  }
+
+  if (interaction.customId === "mu_panel:show") {
+    if (!(await ensureAdmin(interaction, config))) {
+      return;
+    }
+
+    const panel = await buildPanel(interaction, config, logger);
+    await replyEphemeral(interaction, panel);
+    return;
+  }
+
+  if (interaction.customId === "mu_match:panel") {
+    const panel = buildMatchPanel();
+    await replyEphemeral(interaction, panel);
+    return;
+  }
+
+  if (interaction.customId === "mu_match:create") {
+    await showMatchCreateModal(interaction);
     return;
   }
 
@@ -380,17 +476,41 @@ export async function handleModalSubmit(
     await handleDeleteDateRequest(interaction, config, parsedDate.startOf("day"));
   }
 
+  if (interaction.customId === "mu_match:create_modal") {
+    const dateInput = interaction.fields.getTextInputValue("date");
+    const player1Raw = interaction.fields.getTextInputValue("player1");
+    const player2Raw = interaction.fields.getTextInputValue("player2");
+    const gameInput = interaction.fields.getTextInputValue("game");
+
+    const player1Id = parseUserIdInput(player1Raw);
+    const player2Id = parseUserIdInput(player2Raw);
+
+    if (!player1Id || !player2Id) {
+      await replyEphemeral(interaction, {
+        content: "❌ Merci d'indiquer deux joueurs valides (mention ou ID)."
+      });
+      return;
+    }
+
+    await handleMatchCreate(interaction, config, logger, {
+      dateInput,
+      player1Id,
+      player2Id,
+      gameInput
+    });
+  }
+
   if (interaction.customId.startsWith("mu_match:refuse_modal:")) {
     const matchId = Number(interaction.customId.replace("mu_match:refuse_modal:", ""));
     const reason = interaction.fields.getTextInputValue("reason").trim();
-    await handleMatchRefuse(interaction, config, logger, matchId, reason);
+    await performMatchRefuse(interaction, config, logger, matchId, reason);
     return;
   }
 
   if (interaction.customId.startsWith("mu_match:cancel_modal:")) {
     const matchId = Number(interaction.customId.replace("mu_match:cancel_modal:", ""));
     const reason = interaction.fields.getTextInputValue("reason").trim();
-    await handleMatchCancel(interaction, config, logger, matchId, reason);
+    await performMatchCancel(interaction, config, logger, matchId, reason);
     return;
   }
 }
@@ -759,6 +879,177 @@ async function handleDeleteMonthConfirm(
   });
 }
 
+type MatchCreateInput = {
+  dateInput: string;
+  player1Id: string;
+  player2Id: string;
+  gameInput: string;
+};
+
+type MatchActionInput = {
+  dateInput: string;
+  player1Id: string;
+  player2Id: string;
+};
+
+async function handleMatchCreate(
+  interaction: EphemeralInteraction,
+  config: AppConfig,
+  logger: Logger,
+  input: MatchCreateInput
+): Promise<void> {
+  const parsedDate = parseFrenchDate(input.dateInput, config.timezone);
+  if (!parsedDate) {
+    await replyEphemeral(interaction, {
+      content: "❌ Date invalide. Format attendu : JJ/MM/AAAA."
+    });
+    return;
+  }
+
+  if (!isFriday(parsedDate)) {
+    await replyEphemeral(interaction, { content: "❌ La date doit être un vendredi." });
+    return;
+  }
+
+  if (input.player1Id === input.player2Id) {
+    await replyEphemeral(interaction, { content: "⛔ Les deux joueurs doivent être différents." });
+    return;
+  }
+
+  const gameSystem = resolveGameSystemInput(input.gameInput);
+  if (!gameSystem) {
+    await replyEphemeral(interaction, {
+      content: "❌ Jeu invalide. Choisis 40k, AoS, Kill Team, ou Autre."
+    });
+    return;
+  }
+
+  await replyEphemeral(interaction, { content: "⏳ Création de la partie..." });
+
+  const prisma = getPrisma();
+  const event = await prisma.event.findUnique({ where: { date: parsedDate.toDate() } });
+
+  if (!event) {
+    await interaction.editReply({
+      content: `❌ Aucune soirée trouvée pour le ${formatFrenchDate(
+        parsedDate
+      )}. Demande à un admin de saisir les tables via /mu_tables set.`
+    });
+    return;
+  }
+
+  if (event.status === "FERME" || event.tables <= 0) {
+    await interaction.editReply({
+      content: "⛔ Soirée fermée : les réservations sont impossibles."
+    });
+    return;
+  }
+
+  const [player1, player2] = await Promise.all([
+    upsertUserFromInteraction(prisma, interaction, input.player1Id),
+    upsertUserFromInteraction(prisma, interaction, input.player2Id)
+  ]);
+
+  const duplicate = await prisma.match.findFirst({
+    where: {
+      eventId: event.id,
+      OR: [
+        { player1Id: player1.id },
+        { player2Id: player1.id },
+        { player1Id: player2.id },
+        { player2Id: player2.id }
+      ]
+    }
+  });
+
+  if (duplicate) {
+    await interaction.editReply({
+      content: "⛔ Un des joueurs a déjà une partie enregistrée pour cette soirée."
+    });
+    return;
+  }
+
+  const match = await prisma.match.create({
+    data: {
+      eventId: event.id,
+      player1Id: player1.id,
+      player2Id: player2.id,
+      gameSystem
+    }
+  });
+
+  const gameLabel = GAME_LABELS[gameSystem];
+  await interaction.editReply({
+    content: `✅ Partie enregistrée : <@${input.player1Id}> vs <@${input.player2Id}> (${gameLabel}).`,
+    components: [buildMatchActionRow(match.id)]
+  });
+
+  await notifyMatchCreated(
+    interaction,
+    logger,
+    match.id,
+    [input.player1Id, input.player2Id],
+    gameLabel
+  );
+}
+
+async function findMatchForAction(
+  interaction: EphemeralInteraction,
+  config: AppConfig,
+  input: MatchActionInput
+): Promise<{ id: number } | null> {
+  const parsedDate = parseFrenchDate(input.dateInput, config.timezone);
+  if (!parsedDate) {
+    await replyEphemeral(interaction, {
+      content: "❌ Date invalide. Format attendu : JJ/MM/AAAA."
+    });
+    return null;
+  }
+
+  if (!isFriday(parsedDate)) {
+    await replyEphemeral(interaction, { content: "❌ La date doit être un vendredi." });
+    return null;
+  }
+
+  if (input.player1Id === input.player2Id) {
+    await replyEphemeral(interaction, { content: "⛔ Les deux joueurs doivent être différents." });
+    return null;
+  }
+
+  const prisma = getPrisma();
+  const event = await prisma.event.findUnique({ where: { date: parsedDate.toDate() } });
+  if (!event) {
+    await replyEphemeral(interaction, {
+      content: `❌ Aucun créneau pour le ${formatFrenchDate(parsedDate)}.`
+    });
+    return null;
+  }
+
+  const match = await prisma.match.findFirst({
+    where: {
+      eventId: event.id,
+      OR: [
+        {
+          player1: { discordId: input.player1Id },
+          player2: { discordId: input.player2Id }
+        },
+        {
+          player1: { discordId: input.player2Id },
+          player2: { discordId: input.player1Id }
+        }
+      ]
+    },
+    select: { id: true }
+  });
+
+  if (!match) {
+    await replyEphemeral(interaction, { content: "❌ Partie introuvable." });
+    return null;
+  }
+
+  return match;
+}
+
 async function replyEphemeral(
   interaction: EphemeralInteraction,
   payload: ReplyPayload
@@ -799,6 +1090,12 @@ function buildHealthRow() {
         custom_id: "mu_health:check",
         label: "Vérifier à nouveau",
         style: ButtonStyle.Secondary
+      },
+      {
+        type: 2,
+        custom_id: "mu_panel:show",
+        label: "Panneau admin",
+        style: ButtonStyle.Primary
       }
     ]
   };
@@ -813,6 +1110,12 @@ function buildConfigRow() {
         custom_id: "mu_config:show",
         label: "Rafraîchir la config",
         style: ButtonStyle.Secondary
+      },
+      {
+        type: 2,
+        custom_id: "mu_panel:show",
+        label: "Panneau admin",
+        style: ButtonStyle.Primary
       }
     ]
   };
@@ -870,6 +1173,64 @@ function buildSlotsRow() {
   };
 }
 
+function buildMatchPanel(): ReplyPayload {
+  return {
+    content: [
+      "🎯 Panneau de gestion des parties",
+      "Actions disponibles : création de partie, validation/refus/annulation via boutons ou commandes."
+    ].join("\n"),
+    components: buildMatchPanelRows()
+  };
+}
+
+function buildMatchPanelRows() {
+  return [
+    {
+      type: 1,
+      components: [
+        {
+          type: 2,
+          custom_id: "mu_match:create",
+          label: "Créer une partie",
+          style: ButtonStyle.Primary
+        },
+        {
+          type: 2,
+          custom_id: "mu_match:panel",
+          label: "Rafraîchir",
+          style: ButtonStyle.Secondary
+        }
+      ]
+    }
+  ];
+}
+
+function buildMatchActionRow(matchId: number) {
+  return {
+    type: 1,
+    components: [
+      {
+        type: 2,
+        custom_id: `mu_match:validate:${matchId}`,
+        label: "Valider",
+        style: ButtonStyle.Success
+      },
+      {
+        type: 2,
+        custom_id: `mu_match:refuse:${matchId}`,
+        label: "Refuser",
+        style: ButtonStyle.Danger
+      },
+      {
+        type: 2,
+        custom_id: `mu_match:cancel:${matchId}`,
+        label: "Annuler",
+        style: ButtonStyle.Secondary
+      }
+    ]
+  };
+}
+
 async function buildPanel(
   interaction: EphemeralInteraction,
   config: AppConfig,
@@ -912,6 +1273,12 @@ function buildPanelRows() {
           custom_id: "mu_slots:delete_month",
           label: "Supprimer créneaux",
           style: ButtonStyle.Danger
+        },
+        {
+          type: 2,
+          custom_id: "mu_match:panel",
+          label: "Parties",
+          style: ButtonStyle.Secondary
         }
       ]
     },
@@ -1076,6 +1443,38 @@ function buildThreadName(game: GameSystem, date: dayjs.Dayjs): string {
   return `Soirée ${GAME_LABELS[game]} le ${formatThreadDayMonth(date)}`;
 }
 
+function normalizeGameInput(input: string): string {
+  return input
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function resolveGameSystemInput(input: string): GameSystem | null {
+  if (Object.values(GameSystem).includes(input as GameSystem)) {
+    return input as GameSystem;
+  }
+
+  const normalized = normalizeGameInput(input);
+  return GAME_ALIASES.get(normalized) ?? null;
+}
+
+function parseUserIdInput(input: string): string | null {
+  const trimmed = input.trim();
+  const mentionMatch = trimmed.match(/<@!?([0-9]+)>/);
+  if (mentionMatch) {
+    return mentionMatch[1];
+  }
+
+  if (/^[0-9]+$/.test(trimmed)) {
+    return trimmed;
+  }
+
+  return null;
+}
+
 type SendableChannel = {
   send: (payload: { content: string }) => Promise<unknown>;
   isThread?: () => boolean;
@@ -1218,6 +1617,16 @@ async function handleMatchValidate(
   logger: Logger,
   matchId: number
 ): Promise<void> {
+  await performMatchValidate(interaction, config, logger, matchId, true);
+}
+
+async function performMatchValidate(
+  interaction: EphemeralInteraction,
+  config: AppConfig,
+  logger: Logger,
+  matchId: number,
+  disableButtons: boolean
+): Promise<void> {
   if (!Number.isFinite(matchId)) {
     await replyEphemeral(interaction, { content: "❌ Partie introuvable." });
     return;
@@ -1263,11 +1672,14 @@ async function handleMatchValidate(
   );
 
   await interaction.editReply({ content: "✅ Partie validée." });
-  await disableInteractionButtons(interaction);
+
+  if (disableButtons && "message" in interaction) {
+    await disableInteractionButtons(interaction as ButtonInteraction);
+  }
 }
 
-async function handleMatchRefuse(
-  interaction: ModalSubmitInteraction,
+async function performMatchRefuse(
+  interaction: EphemeralInteraction,
   config: AppConfig,
   logger: Logger,
   matchId: number,
@@ -1322,8 +1734,8 @@ async function handleMatchRefuse(
   await interaction.editReply({ content: "⛔ Partie refusée." });
 }
 
-async function handleMatchCancel(
-  interaction: ModalSubmitInteraction,
+async function performMatchCancel(
+  interaction: EphemeralInteraction,
   config: AppConfig,
   logger: Logger,
   matchId: number,
@@ -1456,7 +1868,7 @@ async function showMatchReasonModal(
 }
 
 async function canCancelMatch(
-  interaction: ModalSubmitInteraction,
+  interaction: EphemeralInteraction,
   config: AppConfig,
   match: {
     player1: { discordId: string };
@@ -1536,6 +1948,71 @@ async function notifyMatchStatus(
   }
 }
 
+async function notifyMatchCreated(
+  interaction: EphemeralInteraction,
+  logger: Logger,
+  matchId: number,
+  playerIds: string[],
+  gameLabel: string
+): Promise<void> {
+  const prisma = getPrisma();
+  const dmContent = `✅ Votre partie ${gameLabel} est enregistrée et en attente de validation.`;
+
+  const results = await Promise.all(
+    playerIds.map(async (discordId) => {
+      try {
+        const user = await interaction.client.users.fetch(discordId);
+        await user.send(dmContent);
+        return { success: true };
+      } catch (err) {
+        logger.warn({ err, userId: discordId }, "Failed to send DM");
+        return { success: false, error: err instanceof Error ? err.message : String(err) };
+      }
+    })
+  );
+
+  await prisma.notification.createMany({
+    data: results.map((result) => ({
+      matchId,
+      type: NotificationType.DM,
+      success: result.success,
+      error: result.success ? null : result.error
+    }))
+  });
+}
+
+async function upsertUserFromInteraction(
+  prisma: ReturnType<typeof getPrisma>,
+  interaction: EphemeralInteraction,
+  discordId: string
+) {
+  let displayName: string | null = null;
+
+  if (interaction.inGuild()) {
+    try {
+      const member = await interaction.guild?.members.fetch(discordId);
+      displayName = member?.displayName ?? member?.user.username ?? null;
+    } catch {
+      displayName = null;
+    }
+  }
+
+  if (!displayName) {
+    try {
+      const user = await interaction.client.users.fetch(discordId);
+      displayName = user.username;
+    } catch {
+      displayName = null;
+    }
+  }
+
+  return prisma.user.upsert({
+    where: { discordId },
+    create: { discordId, displayName },
+    update: { displayName: displayName ?? undefined, lastSeenAt: new Date() }
+  });
+}
+
 async function disableInteractionButtons(interaction: ButtonInteraction): Promise<void> {
   try {
     if (interaction.message.edit) {
@@ -1576,6 +2053,74 @@ async function showDeleteDateModal(
             style: TextInputStyle.Short,
             required: true,
             placeholder: "28/02/2026"
+          }
+        ]
+      }
+    ]
+  };
+
+  await interaction.showModal(modal as ModalPayload);
+}
+
+async function showMatchCreateModal(interaction: ButtonInteraction): Promise<void> {
+  if (!interaction.inGuild()) {
+    await replyEphemeral(interaction, { content: "Commande réservée au serveur." });
+    return;
+  }
+
+  const modal = {
+    custom_id: "mu_match:create_modal",
+    title: "Créer une partie",
+    components: [
+      {
+        type: 1,
+        components: [
+          {
+            type: 4,
+            custom_id: "date",
+            label: "Date (JJ/MM/AAAA)",
+            style: TextInputStyle.Short,
+            required: true,
+            placeholder: "28/02/2026"
+          }
+        ]
+      },
+      {
+        type: 1,
+        components: [
+          {
+            type: 4,
+            custom_id: "player1",
+            label: "Joueur 1 (mention ou ID)",
+            style: TextInputStyle.Short,
+            required: true,
+            placeholder: "@Alice"
+          }
+        ]
+      },
+      {
+        type: 1,
+        components: [
+          {
+            type: 4,
+            custom_id: "player2",
+            label: "Joueur 2 (mention ou ID)",
+            style: TextInputStyle.Short,
+            required: true,
+            placeholder: "@Bob"
+          }
+        ]
+      },
+      {
+        type: 1,
+        components: [
+          {
+            type: 4,
+            custom_id: "game",
+            label: "Jeu (40k, AoS, Kill Team, Autre)",
+            style: TextInputStyle.Short,
+            required: true,
+            placeholder: "40k"
           }
         ]
       }
