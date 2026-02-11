@@ -4,14 +4,24 @@ import { ButtonStyle, MessageFlags, TextInputStyle } from "discord.js";
 import type {
   ButtonInteraction,
   ChatInputCommandInteraction,
-  ModalSubmitInteraction
+  ModalSubmitInteraction,
+  StringSelectMenuInteraction
 } from "discord.js";
+import type { Message } from "discord.js";
 import type { Logger } from "pino";
 
 import type { AppConfig } from "../config";
 import { getPrisma } from "../db";
+import {
+  SLOT_DAYS_SETTING,
+  buildMonthSlots,
+  formatSlotDays,
+  getSlotDays,
+  isSlotDay,
+  parseSlotDaysInput
+} from "../services/slots";
 import { getClosureInfo } from "../services/vacations";
-import { formatFrenchDate, isFriday, parseFrenchDate } from "../utils/dates";
+import { formatFrenchDate, parseFrenchDate } from "../utils/dates";
 
 import { isAdminMember } from "./admin";
 
@@ -19,6 +29,11 @@ type EphemeralInteraction =
   | ChatInputCommandInteraction
   | ButtonInteraction
   | ModalSubmitInteraction;
+
+type PublicInteraction =
+  | ChatInputCommandInteraction
+  | ButtonInteraction
+  | StringSelectMenuInteraction;
 
 type ReplyPayload = {
   content: string;
@@ -70,17 +85,6 @@ const FRENCH_MONTHS = [
   "décembre"
 ];
 
-function formatConfig(config: AppConfig): string {
-  return [
-    "```",
-    `guildId: ${config.discordGuildId}`,
-    `channelId: ${config.discordChannelId}`,
-    `timezone: ${config.timezone}`,
-    `mentionInThread: ${config.mentionInThread}`,
-    "```"
-  ].join("\n");
-}
-
 export async function handleInteraction(
   interaction: ChatInputCommandInteraction,
   config: AppConfig,
@@ -92,14 +96,8 @@ export async function handleInteraction(
   }
 
   if (interaction.commandName === "mu_config") {
-    const subcommand = interaction.options.getSubcommand();
-
-    if (subcommand === "show") {
-      await handleConfigShow(interaction, config);
-      return;
-    }
-
-    logger.warn({ subcommand }, "Unknown config subcommand");
+    await handleConfigMenu(interaction, config, logger);
+    return;
   }
 
   if (interaction.commandName === "mu_tables") {
@@ -123,11 +121,6 @@ export async function handleInteraction(
       await replyEphemeral(interaction, {
         content: "❌ Date invalide. Format attendu : JJ/MM/AAAA."
       });
-      return;
-    }
-
-    if (!isFriday(parsedDate)) {
-      await replyEphemeral(interaction, { content: "❌ La date doit être un vendredi." });
       return;
     }
 
@@ -241,23 +234,6 @@ export async function handleInteraction(
       return;
     }
   }
-
-  if (interaction.commandName === "mu_panel") {
-    if (!interaction.inGuild()) {
-      await replyEphemeral(interaction, { content: "Commande réservée au serveur." });
-      return;
-    }
-
-    if (!interaction.member || !isAdminMember(interaction.member, config)) {
-      await replyEphemeral(interaction, {
-        content: "⛔ Cette commande est réservée aux administrateurs."
-      });
-      return;
-    }
-
-    const panel = await buildPanel(interaction, config, logger);
-    await replyEphemeral(interaction, panel);
-  }
 }
 
 export async function handleButtonInteraction(
@@ -271,17 +247,7 @@ export async function handleButtonInteraction(
   }
 
   if (interaction.customId === "mu_config:show") {
-    await handleConfigShow(interaction, config);
-    return;
-  }
-
-  if (interaction.customId === "mu_panel:show") {
-    if (!(await ensureAdmin(interaction, config))) {
-      return;
-    }
-
-    const panel = await buildPanel(interaction, config, logger);
-    await replyEphemeral(interaction, panel);
+    await handleConfigMenu(interaction, config, logger);
     return;
   }
 
@@ -293,6 +259,21 @@ export async function handleButtonInteraction(
 
   if (interaction.customId === "mu_match:create") {
     await showMatchCreateModal(interaction);
+    return;
+  }
+
+  if (interaction.customId === "mu_match:validate_request") {
+    await showMatchActionModal(interaction, config, "validate");
+    return;
+  }
+
+  if (interaction.customId === "mu_match:refuse_request") {
+    await showMatchActionModal(interaction, config, "refuse");
+    return;
+  }
+
+  if (interaction.customId === "mu_match:cancel_request") {
+    await showMatchActionModal(interaction, config, "cancel");
     return;
   }
 
@@ -313,6 +294,11 @@ export async function handleButtonInteraction(
 
   if (interaction.customId === "mu_slots:delete_date") {
     await showDeleteDateModal(interaction, config);
+    return;
+  }
+
+  if (interaction.customId === "mu_slots:configure_days") {
+    await showSlotDaysModal(interaction, config);
     return;
   }
 
@@ -385,6 +371,28 @@ export async function handleButtonInteraction(
   }
 }
 
+export async function handleSelectMenuInteraction(
+  interaction: StringSelectMenuInteraction,
+  config: AppConfig,
+  logger: Logger
+): Promise<void> {
+  if (interaction.customId !== "mu_config:menu") {
+    return;
+  }
+
+  const selection = interaction.values[0] as ConfigCategory | undefined;
+  if (!selection || !CONFIG_CATEGORIES.some((category) => category.value === selection)) {
+    await interaction.update({
+      content: "❌ Catégorie inconnue.",
+      components: [buildConfigMenuSelect()]
+    } as unknown as Parameters<typeof interaction.update>[0]);
+    return;
+  }
+
+  const payload = await buildConfigCategoryResponse(selection, config, logger);
+  await interaction.update(payload as unknown as Parameters<typeof interaction.update>[0]);
+}
+
 export async function handleModalSubmit(
   interaction: ModalSubmitInteraction,
   config: AppConfig,
@@ -420,11 +428,6 @@ export async function handleModalSubmit(
       return;
     }
 
-    if (!isFriday(parsedDate)) {
-      await replyEphemeral(interaction, { content: "❌ La date doit être un vendredi." });
-      return;
-    }
-
     await handleTablesSet(interaction, config, logger, parsedDate, count);
     return;
   }
@@ -444,11 +447,6 @@ export async function handleModalSubmit(
       await replyEphemeral(interaction, {
         content: "❌ Date invalide. Format attendu : JJ/MM/AAAA."
       });
-      return;
-    }
-
-    if (!isFriday(parsedDate)) {
-      await replyEphemeral(interaction, { content: "❌ La date doit être un vendredi." });
       return;
     }
 
@@ -476,6 +474,37 @@ export async function handleModalSubmit(
     await handleDeleteDateRequest(interaction, config, parsedDate.startOf("day"));
   }
 
+  if (interaction.customId === "mu_slots:configure_days_modal") {
+    if (!interaction.member || !isAdminMember(interaction.member, config)) {
+      await replyEphemeral(interaction, {
+        content: "⛔ Cette commande est réservée aux administrateurs."
+      });
+      return;
+    }
+
+    const daysInput = interaction.fields.getTextInputValue("days");
+    const parsedDays = parseSlotDaysInput(daysInput);
+
+    if (parsedDays.length === 0) {
+      await replyEphemeral(interaction, {
+        content: "❌ Jours invalides. Utilise des numéros 1-7 ou des jours (ex: lun, mer, ven)."
+      });
+      return;
+    }
+
+    const prisma = getPrisma();
+    await prisma.setting.upsert({
+      where: { key: SLOT_DAYS_SETTING },
+      create: { key: SLOT_DAYS_SETTING, value: parsedDays.join(",") },
+      update: { value: parsedDays.join(",") }
+    });
+
+    await replyEphemeral(interaction, {
+      content: `✅ Jours des créneaux mis à jour : ${formatSlotDays(parsedDays)}`
+    });
+    return;
+  }
+
   if (interaction.customId === "mu_match:create_modal") {
     const dateInput = interaction.fields.getTextInputValue("date");
     const player1Raw = interaction.fields.getTextInputValue("player1");
@@ -498,6 +527,96 @@ export async function handleModalSubmit(
       player2Id,
       gameInput
     });
+    return;
+  }
+
+  if (interaction.customId === "mu_match:validate_request_modal") {
+    const dateInput = interaction.fields.getTextInputValue("date");
+    const player1Raw = interaction.fields.getTextInputValue("player1");
+    const player2Raw = interaction.fields.getTextInputValue("player2");
+
+    const player1Id = parseUserIdInput(player1Raw);
+    const player2Id = parseUserIdInput(player2Raw);
+
+    if (!player1Id || !player2Id) {
+      await replyEphemeral(interaction, {
+        content: "❌ Merci d'indiquer deux joueurs valides (mention ou ID)."
+      });
+      return;
+    }
+
+    const match = await findMatchForAction(interaction, config, {
+      dateInput,
+      player1Id,
+      player2Id
+    });
+
+    if (!match) {
+      return;
+    }
+
+    await performMatchValidate(interaction, config, logger, match.id, false);
+    return;
+  }
+
+  if (interaction.customId === "mu_match:refuse_request_modal") {
+    const dateInput = interaction.fields.getTextInputValue("date");
+    const player1Raw = interaction.fields.getTextInputValue("player1");
+    const player2Raw = interaction.fields.getTextInputValue("player2");
+    const reason = interaction.fields.getTextInputValue("reason").trim();
+
+    const player1Id = parseUserIdInput(player1Raw);
+    const player2Id = parseUserIdInput(player2Raw);
+
+    if (!player1Id || !player2Id) {
+      await replyEphemeral(interaction, {
+        content: "❌ Merci d'indiquer deux joueurs valides (mention ou ID)."
+      });
+      return;
+    }
+
+    const match = await findMatchForAction(interaction, config, {
+      dateInput,
+      player1Id,
+      player2Id
+    });
+
+    if (!match) {
+      return;
+    }
+
+    await performMatchRefuse(interaction, config, logger, match.id, reason);
+    return;
+  }
+
+  if (interaction.customId === "mu_match:cancel_request_modal") {
+    const dateInput = interaction.fields.getTextInputValue("date");
+    const player1Raw = interaction.fields.getTextInputValue("player1");
+    const player2Raw = interaction.fields.getTextInputValue("player2");
+    const reason = interaction.fields.getTextInputValue("reason").trim();
+
+    const player1Id = parseUserIdInput(player1Raw);
+    const player2Id = parseUserIdInput(player2Raw);
+
+    if (!player1Id || !player2Id) {
+      await replyEphemeral(interaction, {
+        content: "❌ Merci d'indiquer deux joueurs valides (mention ou ID)."
+      });
+      return;
+    }
+
+    const match = await findMatchForAction(interaction, config, {
+      dateInput,
+      player1Id,
+      player2Id
+    });
+
+    if (!match) {
+      return;
+    }
+
+    await performMatchCancel(interaction, config, logger, match.id, reason);
+    return;
   }
 
   if (interaction.customId.startsWith("mu_match:refuse_modal:")) {
@@ -522,14 +641,20 @@ async function handleHealth(interaction: EphemeralInteraction): Promise<void> {
   });
 }
 
-async function handleConfigShow(
-  interaction: EphemeralInteraction,
-  config: AppConfig
+async function handleConfigMenu(
+  interaction: PublicInteraction,
+  config: AppConfig,
+  logger: Logger
 ): Promise<void> {
-  await replyEphemeral(interaction, {
-    content: formatConfig(config),
-    components: [buildConfigRow()]
-  });
+  if ("inGuild" in interaction && !interaction.inGuild()) {
+    await replyPublic(interaction, { content: "Commande réservée au serveur." });
+    return;
+  }
+
+  const content = await buildConfigMenuContent(config, logger);
+  const components = [buildConfigMenuSelect()];
+  const message = await replyPublic(interaction, { content, components });
+  scheduleConfigMenuExpiry(message, logger);
 }
 
 async function handleTablesSet(
@@ -548,6 +673,16 @@ async function handleTablesSet(
   const closure = await getClosureInfo(parsedDate, config.vacationAcademy, config.timezone, logger);
   const eventDate = parsedDate.toDate();
   const prisma = getPrisma();
+  const slotDays = await getSlotDays(prisma);
+
+  if (!isSlotDay(parsedDate, slotDays)) {
+    await interaction.editReply({
+      content: `❌ La date ne correspond pas à un jour de créneau. Jours actifs : ${formatSlotDays(
+        slotDays
+      )}.`
+    });
+    return;
+  }
   const isClosed = closure.closed || count <= 0;
   const tables = isClosed ? 0 : count;
 
@@ -603,6 +738,16 @@ async function handleTablesShow(
   const closure = await getClosureInfo(parsedDate, config.vacationAcademy, config.timezone, logger);
   const eventDate = parsedDate.toDate();
   const prisma = getPrisma();
+  const slotDays = await getSlotDays(prisma);
+
+  if (!isSlotDay(parsedDate, slotDays)) {
+    await interaction.editReply({
+      content: `❌ La date ne correspond pas à un jour de créneau. Jours actifs : ${formatSlotDays(
+        slotDays
+      )}.`
+    });
+    return;
+  }
   const event = await prisma.event.findUnique({ where: { date: eventDate } });
   const closureText = closure.closed
     ? `⚠️ ${closure.reason ?? "Fermeture"} (${closure.period?.description ?? "Vacances"})`
@@ -642,14 +787,15 @@ async function handleGenerateSlots(
 
   const prisma = getPrisma();
   const monthName = dayjs().tz(config.timezone).format("MMMM YYYY");
-  const fridays = buildMonthFridays(config.timezone);
+  const slotDays = await getSlotDays(prisma);
+  const slots = buildMonthSlots(config.timezone, slotDays);
 
   let created = 0;
   let skipped = 0;
   let closedSkipped = 0;
 
-  for (const friday of fridays) {
-    const existing = await prisma.event.findUnique({ where: { date: friday.toDate() } });
+  for (const slotDate of slots) {
+    const existing = await prisma.event.findUnique({ where: { date: slotDate.toDate() } });
     if (existing) {
       if (existing.status === "OUVERT") {
         await ensureEventThreads(interaction, config, logger, existing);
@@ -658,7 +804,7 @@ async function handleGenerateSlots(
       continue;
     }
 
-    const closure = await getClosureInfo(friday, config.vacationAcademy, config.timezone, logger);
+    const closure = await getClosureInfo(slotDate, config.vacationAcademy, config.timezone, logger);
     if (closure.closed) {
       closedSkipped += 1;
       continue;
@@ -666,7 +812,7 @@ async function handleGenerateSlots(
 
     const event = await prisma.event.create({
       data: {
-        date: friday.toDate(),
+        date: slotDate.toDate(),
         tables: 0,
         status: "OUVERT",
         isVacation: false
@@ -906,11 +1052,6 @@ async function handleMatchCreate(
     return;
   }
 
-  if (!isFriday(parsedDate)) {
-    await replyEphemeral(interaction, { content: "❌ La date doit être un vendredi." });
-    return;
-  }
-
   if (input.player1Id === input.player2Id) {
     await replyEphemeral(interaction, { content: "⛔ Les deux joueurs doivent être différents." });
     return;
@@ -927,6 +1068,16 @@ async function handleMatchCreate(
   await replyEphemeral(interaction, { content: "⏳ Création de la partie..." });
 
   const prisma = getPrisma();
+  const slotDays = await getSlotDays(prisma);
+
+  if (!isSlotDay(parsedDate, slotDays)) {
+    await replyEphemeral(interaction, {
+      content: `❌ La date ne correspond pas à un jour de créneau. Jours actifs : ${formatSlotDays(
+        slotDays
+      )}.`
+    });
+    return;
+  }
   const event = await prisma.event.findUnique({ where: { date: parsedDate.toDate() } });
 
   if (!event) {
@@ -1006,17 +1157,22 @@ async function findMatchForAction(
     return null;
   }
 
-  if (!isFriday(parsedDate)) {
-    await replyEphemeral(interaction, { content: "❌ La date doit être un vendredi." });
-    return null;
-  }
-
   if (input.player1Id === input.player2Id) {
     await replyEphemeral(interaction, { content: "⛔ Les deux joueurs doivent être différents." });
     return null;
   }
 
   const prisma = getPrisma();
+  const slotDays = await getSlotDays(prisma);
+
+  if (!isSlotDay(parsedDate, slotDays)) {
+    await replyEphemeral(interaction, {
+      content: `❌ La date ne correspond pas à un jour de créneau. Jours actifs : ${formatSlotDays(
+        slotDays
+      )}.`
+    });
+    return null;
+  }
   const event = await prisma.event.findUnique({ where: { date: parsedDate.toDate() } });
   if (!event) {
     await replyEphemeral(interaction, {
@@ -1065,6 +1221,39 @@ async function replyEphemeral(
   } as unknown as Parameters<typeof interaction.reply>[0]);
 }
 
+async function replyPublic(
+  interaction: PublicInteraction,
+  payload: ReplyPayload
+): Promise<Message> {
+  if ("replied" in interaction && (interaction.replied || interaction.deferred)) {
+    const message = await interaction.editReply(
+      payload as unknown as Parameters<typeof interaction.editReply>[0]
+    );
+    return message as Message;
+  }
+
+  const message = await interaction.reply({
+    ...(payload as unknown as Parameters<typeof interaction.reply>[0]),
+    fetchReply: true
+  });
+
+  return message as Message;
+}
+
+function scheduleConfigMenuExpiry(message: Message, logger: Logger): void {
+  setTimeout(async () => {
+    try {
+      const refreshed = await message.fetch();
+      const content = [refreshed.content, "", "💡 Les 60 secondes sont écoulées !"]
+        .filter(Boolean)
+        .join("\n");
+      await refreshed.edit({ content, components: [] });
+    } catch (err) {
+      logger.warn({ err }, "Failed to expire config menu");
+    }
+  }, 60_000);
+}
+
 async function ensureAdmin(interaction: EphemeralInteraction, config: AppConfig): Promise<boolean> {
   if (!interaction.inGuild()) {
     await replyEphemeral(interaction, { content: "Commande réservée au serveur." });
@@ -1090,32 +1279,6 @@ function buildHealthRow() {
         custom_id: "mu_health:check",
         label: "Vérifier à nouveau",
         style: ButtonStyle.Secondary
-      },
-      {
-        type: 2,
-        custom_id: "mu_panel:show",
-        label: "Panneau admin",
-        style: ButtonStyle.Primary
-      }
-    ]
-  };
-}
-
-function buildConfigRow() {
-  return {
-    type: 1,
-    components: [
-      {
-        type: 2,
-        custom_id: "mu_config:show",
-        label: "Rafraîchir la config",
-        style: ButtonStyle.Secondary
-      },
-      {
-        type: 2,
-        custom_id: "mu_panel:show",
-        label: "Panneau admin",
-        style: ButtonStyle.Primary
       }
     ]
   };
@@ -1171,6 +1334,139 @@ function buildSlotsRow() {
       }
     ]
   };
+}
+
+type ConfigCategory = "slots" | "matches" | "tables";
+
+const CONFIG_CATEGORIES: { value: ConfigCategory; label: string; description: string }[] = [
+  { value: "slots", label: "Créneaux", description: "Gérer les créneaux" },
+  { value: "matches", label: "Parties", description: "Gérer les parties" },
+  { value: "tables", label: "Tables", description: "Gérer les tables" }
+];
+
+function buildConfigMenuSelect(selected?: ConfigCategory) {
+  return {
+    type: 1,
+    components: [
+      {
+        type: 3,
+        custom_id: "mu_config:menu",
+        placeholder: "Choisir une catégorie",
+        min_values: 1,
+        max_values: 1,
+        options: CONFIG_CATEGORIES.map((category) => ({
+          label: category.label,
+          value: category.value,
+          description: category.description,
+          default: category.value === selected
+        }))
+      }
+    ]
+  };
+}
+
+function buildConfigCategoryContent(title: string, extra?: string) {
+  return [title, "Que souhaitez-vous configurer ?", extra].filter(Boolean).join("\n");
+}
+
+function buildSlotsCategoryRows() {
+  return [
+    {
+      type: 1,
+      components: [
+        {
+          type: 2,
+          custom_id: "mu_slots:configure_days",
+          label: "Configurer les jours",
+          style: ButtonStyle.Primary
+        },
+        {
+          type: 2,
+          custom_id: "mu_slots:generate_current_month",
+          label: "Générer le mois",
+          style: ButtonStyle.Secondary
+        }
+      ]
+    },
+    {
+      type: 1,
+      components: [
+        {
+          type: 2,
+          custom_id: "mu_slots:delete_month",
+          label: "Supprimer le mois",
+          style: ButtonStyle.Danger
+        },
+        {
+          type: 2,
+          custom_id: "mu_slots:delete_date",
+          label: "Supprimer une date",
+          style: ButtonStyle.Danger
+        }
+      ]
+    }
+  ];
+}
+
+function buildMatchesCategoryRows() {
+  return [
+    {
+      type: 1,
+      components: [
+        {
+          type: 2,
+          custom_id: "mu_match:create",
+          label: "Créer",
+          style: ButtonStyle.Primary
+        },
+        {
+          type: 2,
+          custom_id: "mu_match:validate_request",
+          label: "Valider",
+          style: ButtonStyle.Success
+        }
+      ]
+    },
+    {
+      type: 1,
+      components: [
+        {
+          type: 2,
+          custom_id: "mu_match:refuse_request",
+          label: "Refuser",
+          style: ButtonStyle.Danger
+        },
+        {
+          type: 2,
+          custom_id: "mu_match:cancel_request",
+          label: "Annuler",
+          style: ButtonStyle.Secondary
+        }
+      ]
+    }
+  ];
+}
+
+function buildTablesCategoryRows() {
+  return [
+    {
+      type: 1,
+      components: [
+        {
+          type: 2,
+          custom_id: "mu_tables:set",
+          label: "Définir",
+          style: ButtonStyle.Primary
+        },
+        {
+          type: 2,
+          custom_id: "mu_tables:show",
+          label: "Voir",
+          style: ButtonStyle.Secondary
+        }
+      ]
+    }
+  ];
 }
 
 function buildMatchPanel(): ReplyPayload {
@@ -1231,106 +1527,78 @@ function buildMatchActionRow(matchId: number) {
   };
 }
 
-async function buildPanel(
-  interaction: EphemeralInteraction,
+function formatFrenchMonthYear(date: dayjs.Dayjs): string {
+  const month = FRENCH_MONTHS[date.month()] ?? date.format("MMMM");
+  return `${month} ${date.year()}`;
+}
+
+async function buildConfigMenuContent(config: AppConfig, logger: Logger): Promise<string> {
+  const prisma = getPrisma();
+  const slotDays = await getSlotDays(prisma);
+  const now = dayjs().tz(config.timezone);
+  const offset = now.format("Z");
+  const slotsOverview = await buildMonthSlotsOverview(config, logger, slotDays);
+
+  return [
+    "**Configuration**",
+    "Bienvenue dans la commande de configuration de @Munitorum.",
+    "Grâce à cette commande, vous pouvez configurer les différents modules via le sélecteur ci-dessous.",
+    "",
+    "Paramètres de base :",
+    "Langue : Français",
+    `Fuseau horaire : (UTC${offset}) ${config.timezone}`,
+    `Jours des créneaux : ${formatSlotDays(slotDays)}`,
+    "",
+    `Créneaux du mois (${formatFrenchMonthYear(now)})`,
+    slotsOverview
+  ].join("\n");
+}
+
+async function buildConfigCategoryResponse(
+  category: ConfigCategory,
   config: AppConfig,
   logger: Logger
 ): Promise<ReplyPayload> {
-  const summary = await buildMonthSummary(config, logger);
-  const quickRows = buildQuickDateRows(config.timezone);
+  if (category === "slots") {
+    const prisma = getPrisma();
+    const slotDays = await getSlotDays(prisma);
+    const slotsOverview = await buildMonthSlotsOverview(config, logger, slotDays);
+
+    return {
+      content: [
+        buildConfigCategoryContent("**Créneaux**"),
+        `Jours actifs : ${formatSlotDays(slotDays)}`,
+        "",
+        `Créneaux du mois (${formatFrenchMonthYear(dayjs().tz(config.timezone))})`,
+        slotsOverview
+      ].join("\n"),
+      components: [buildConfigMenuSelect("slots"), ...buildSlotsCategoryRows()]
+    };
+  }
+
+  if (category === "matches") {
+    return {
+      content: buildConfigCategoryContent("**Parties**"),
+      components: [buildConfigMenuSelect("matches"), ...buildMatchesCategoryRows()]
+    };
+  }
 
   return {
-    content: summary,
-    components: [...buildPanelRows(), ...quickRows]
+    content: buildConfigCategoryContent("**Tables**"),
+    components: [buildConfigMenuSelect("tables"), ...buildTablesCategoryRows()]
   };
 }
 
-function buildPanelRows() {
-  return [
-    {
-      type: 1,
-      components: [
-        {
-          type: 2,
-          custom_id: "mu_health:check",
-          label: "Health",
-          style: ButtonStyle.Secondary
-        },
-        {
-          type: 2,
-          custom_id: "mu_config:show",
-          label: "Config",
-          style: ButtonStyle.Secondary
-        },
-        {
-          type: 2,
-          custom_id: "mu_slots:generate_current_month",
-          label: "Générer créneaux",
-          style: ButtonStyle.Secondary
-        },
-        {
-          type: 2,
-          custom_id: "mu_slots:delete_month",
-          label: "Supprimer créneaux",
-          style: ButtonStyle.Danger
-        },
-        {
-          type: 2,
-          custom_id: "mu_match:panel",
-          label: "Parties",
-          style: ButtonStyle.Secondary
-        }
-      ]
-    },
-    {
-      type: 1,
-      components: [
-        {
-          type: 2,
-          custom_id: "mu_tables:set",
-          label: "Définir tables",
-          style: ButtonStyle.Primary
-        },
-        {
-          type: 2,
-          custom_id: "mu_tables:show",
-          label: "Voir tables",
-          style: ButtonStyle.Secondary
-        },
-        {
-          type: 2,
-          custom_id: "mu_slots:delete_date",
-          label: "Supprimer créneau (date)",
-          style: ButtonStyle.Danger
-        }
-      ]
-    }
-  ];
-}
-
-function buildMonthFridays(tz: string) {
-  const now = dayjs().tz(tz);
-  const start = now.startOf("month").startOf("day");
-  const end = now.endOf("month").startOf("day");
-  const dates = [];
-  let cursor = start;
-
-  while (cursor.isBefore(end) || cursor.isSame(end, "day")) {
-    if (cursor.day() === 5) {
-      dates.push(cursor);
-    }
-    cursor = cursor.add(1, "day");
-  }
-
-  return dates;
-}
-
-async function buildMonthSummary(config: AppConfig, logger: Logger): Promise<string> {
+async function buildMonthSlotsOverview(
+  config: AppConfig,
+  logger: Logger,
+  slotDays: number[]
+): Promise<string> {
   const prisma = getPrisma();
   const now = dayjs().tz(config.timezone);
   const monthStart = now.startOf("month").startOf("day");
   const monthEnd = now.endOf("month").endOf("day");
-  const fridays = buildMonthFridays(config.timezone);
+  const slots = buildMonthSlots(config.timezone, slotDays);
 
   const events = await prisma.event.findMany({
     where: {
@@ -1344,60 +1612,35 @@ async function buildMonthSummary(config: AppConfig, logger: Logger): Promise<str
   const eventByDate = new Map(
     events.map((event) => [dayjs(event.date).format("YYYY-MM-DD"), event])
   );
-  let missing = 0;
-  let closed = 0;
 
   const closures = await Promise.all(
-    fridays.map((friday) => getClosureInfo(friday, config.vacationAcademy, config.timezone, logger))
+    slots.map((slotDate) =>
+      getClosureInfo(slotDate, config.vacationAcademy, config.timezone, logger)
+    )
   );
 
-  for (let i = 0; i < fridays.length; i += 1) {
-    const friday = fridays[i];
-    const closure = closures[i];
-    if (closure?.closed) {
-      closed += 1;
-      continue;
-    }
-
-    const key = friday.format("YYYY-MM-DD");
-    const event = eventByDate.get(key);
-    if (!event) {
-      missing += 1;
-    }
+  if (slots.length === 0) {
+    return "Aucun jour configuré.";
   }
 
-  return [
-    "🧰 Panneau d'administration Munitorum",
-    `Mois en cours : ${now.format("MM/YYYY")}`,
-    `Vendredis : ${fridays.length}`,
-    `Créneaux manquants : ${missing}`,
-    `Créneaux fermés : ${closed}`
-  ].join("\n");
-}
+  return slots
+    .map((slotDate, index) => {
+      const key = slotDate.format("YYYY-MM-DD");
+      const closure = closures[index];
+      const event = eventByDate.get(key);
 
-function buildQuickDateRows(tz: string) {
-  const now = dayjs().tz(tz).startOf("day");
-  const dates = [];
-  let cursor = now;
+      let status = "Fermé (non créé)";
+      if (closure?.closed) {
+        status = "Fermé (vacances)";
+      } else if (event && event.status === "OUVERT" && event.tables > 0) {
+        status = "Disponible";
+      } else if (event) {
+        status = "Fermé";
+      }
 
-  while (dates.length < 4) {
-    if (cursor.day() === 5) {
-      dates.push(cursor);
-    }
-    cursor = cursor.add(1, "day");
-  }
-
-  return [
-    {
-      type: 1,
-      components: dates.map((date) => ({
-        type: 2,
-        custom_id: `mu_tables:quick_show:${date.format("YYYY-MM-DD")}`,
-        label: `Voir ${date.format("DD/MM")}`,
-        style: ButtonStyle.Secondary
-      }))
-    }
-  ];
+      return `• ${slotDate.format("DD/MM")} : ${status}`;
+    })
+    .join("\n");
 }
 
 function buildConfirmRow(confirmId: string) {
@@ -2062,6 +2305,42 @@ async function showDeleteDateModal(
   await interaction.showModal(modal as ModalPayload);
 }
 
+async function showSlotDaysModal(interaction: ButtonInteraction, config: AppConfig): Promise<void> {
+  if (!interaction.inGuild()) {
+    await replyEphemeral(interaction, { content: "Commande réservée au serveur." });
+    return;
+  }
+
+  if (!interaction.member || !isAdminMember(interaction.member, config)) {
+    await replyEphemeral(interaction, {
+      content: "⛔ Cette commande est réservée aux administrateurs."
+    });
+    return;
+  }
+
+  const modal = {
+    custom_id: "mu_slots:configure_days_modal",
+    title: "Configurer les jours des créneaux",
+    components: [
+      {
+        type: 1,
+        components: [
+          {
+            type: 4,
+            custom_id: "days",
+            label: "Jours (ex: lun, mer, ven ou 1,3,5)",
+            style: TextInputStyle.Short,
+            required: true,
+            placeholder: "ven"
+          }
+        ]
+      }
+    ]
+  };
+
+  await interaction.showModal(modal as ModalPayload);
+}
+
 async function showMatchCreateModal(interaction: ButtonInteraction): Promise<void> {
   if (!interaction.inGuild()) {
     await replyEphemeral(interaction, { content: "Commande réservée au serveur." });
@@ -2126,6 +2405,99 @@ async function showMatchCreateModal(interaction: ButtonInteraction): Promise<voi
       }
     ]
   };
+
+  await interaction.showModal(modal as ModalPayload);
+}
+
+async function showMatchActionModal(
+  interaction: ButtonInteraction,
+  config: AppConfig,
+  action: "validate" | "refuse" | "cancel"
+): Promise<void> {
+  if (!interaction.inGuild()) {
+    await replyEphemeral(interaction, { content: "Commande réservée au serveur." });
+    return;
+  }
+
+  if (action !== "cancel") {
+    if (!interaction.member || !isAdminMember(interaction.member, config)) {
+      await replyEphemeral(interaction, {
+        content: "⛔ Cette action est réservée aux administrateurs."
+      });
+      return;
+    }
+  }
+
+  const requiresReason = action !== "validate";
+  const titleMap = {
+    validate: "Valider une partie",
+    refuse: "Refuser une partie",
+    cancel: "Annuler une partie"
+  };
+
+  const modal = {
+    custom_id: `mu_match:${action}_request_modal`,
+    title: titleMap[action],
+    components: [
+      {
+        type: 1,
+        components: [
+          {
+            type: 4,
+            custom_id: "date",
+            label: "Date (JJ/MM/AAAA)",
+            style: TextInputStyle.Short,
+            required: true,
+            placeholder: "28/02/2026"
+          }
+        ]
+      },
+      {
+        type: 1,
+        components: [
+          {
+            type: 4,
+            custom_id: "player1",
+            label: "Joueur 1 (mention ou ID)",
+            style: TextInputStyle.Short,
+            required: true,
+            placeholder: "@Alice"
+          }
+        ]
+      },
+      {
+        type: 1,
+        components: [
+          {
+            type: 4,
+            custom_id: "player2",
+            label: "Joueur 2 (mention ou ID)",
+            style: TextInputStyle.Short,
+            required: true,
+            placeholder: "@Bob"
+          }
+        ]
+      },
+      {
+        type: 1,
+        components: [
+          {
+            type: 4,
+            custom_id: "reason",
+            label: "Raison (optionnel)",
+            style: TextInputStyle.Paragraph,
+            required: false,
+            placeholder: "Ex: tables insuffisantes, indisponibilité...",
+            min_length: requiresReason ? 0 : 0
+          }
+        ]
+      }
+    ]
+  };
+
+  if (!requiresReason) {
+    modal.components.pop();
+  }
 
   await interaction.showModal(modal as ModalPayload);
 }

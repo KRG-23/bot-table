@@ -6,7 +6,8 @@ import type { Logger } from "pino";
 
 import type { AppConfig } from "../config";
 import { getPrisma } from "../db";
-import { formatFrenchDate, isFriday, parseFrenchDayMonth } from "../utils/dates";
+import { getSlotDays, formatSlotDays, isSlotDay } from "../services/slots";
+import { formatFrenchDate, parseFrenchDayMonth } from "../utils/dates";
 
 const GAME_ALIASES = new Map<string, GameSystem>([
   ["40k", GameSystem.W40K],
@@ -90,12 +91,17 @@ export async function handleMatchMessage(
     return;
   }
 
-  if (!isFriday(threadDate)) {
-    await message.reply("❌ La date du fil doit correspondre à un vendredi.");
+  const prisma = getPrisma();
+  const slotDays = await getSlotDays(prisma);
+
+  if (!isSlotDay(threadDate, slotDays)) {
+    await message.reply(
+      `❌ La date du fil doit correspondre à un jour de créneau. Jours actifs : ${formatSlotDays(
+        slotDays
+      )}.`
+    );
     return;
   }
-
-  const prisma = getPrisma();
   const event = await findEventForDate(prisma, threadDate);
   if (!event) {
     await message.reply(

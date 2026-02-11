@@ -8,15 +8,8 @@ export const commands = [
   },
   {
     name: "mu_config",
-    description: "Affiche la configuration courante",
-    type: ApplicationCommandType.ChatInput,
-    options: [
-      {
-        name: "show",
-        description: "Voir la configuration active",
-        type: ApplicationCommandOptionType.Subcommand
-      }
-    ]
+    description: "Ouvre le menu de configuration",
+    type: ApplicationCommandType.ChatInput
   },
   {
     name: "mu_tables",
@@ -87,11 +80,6 @@ export const commands = [
         type: ApplicationCommandOptionType.Subcommand
       }
     ]
-  },
-  {
-    name: "mu_panel",
-    description: "Afficher le panneau d'administration",
-    type: ApplicationCommandType.ChatInput
   },
   {
     name: "mu_match",

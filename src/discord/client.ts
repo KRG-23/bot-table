@@ -3,7 +3,12 @@ import type { Logger } from "pino";
 
 import type { AppConfig } from "../config";
 
-import { handleButtonInteraction, handleInteraction, handleModalSubmit } from "./interactions";
+import {
+  handleButtonInteraction,
+  handleInteraction,
+  handleModalSubmit,
+  handleSelectMenuInteraction
+} from "./interactions";
 import { handleMatchMessage } from "./messages";
 
 export function createClient(config: AppConfig, logger: Logger): Client {
@@ -49,6 +54,11 @@ export function createClient(config: AppConfig, logger: Logger): Client {
 
       if (interaction.isModalSubmit()) {
         await handleModalSubmit(interaction, config, logger);
+        return;
+      }
+
+      if (interaction.isStringSelectMenu()) {
+        await handleSelectMenuInteraction(interaction, config, logger);
       }
     } catch (err) {
       logger.error({ err, ageMs }, "Failed to handle interaction");

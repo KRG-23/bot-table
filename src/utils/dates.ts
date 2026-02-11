@@ -17,10 +17,6 @@ export function parseFrenchDate(input: string, tz: string): dayjs.Dayjs | null {
   return parsed.startOf("day");
 }
 
-export function isFriday(date: dayjs.Dayjs): boolean {
-  return date.day() === 5;
-}
-
 export function formatFrenchDate(date: dayjs.Dayjs): string {
   return date.format("DD/MM/YYYY");
 }

@@ -5,10 +5,11 @@
 Munitorum is a Discord bot for tabletop reservations (Warhammer 40k / AoS / Kill Team). It automates table availability, match submissions, validation, and player notifications.
 
 ## Features (current / planned)
-- Slash commands: `/mu_health`, `/mu_config show`, `/mu_tables set|show`, `/mu_slots generate|delete_date|delete_month`, `/mu_panel`
+- Slash commands: `/mu_health`, `/mu_config`, `/mu_tables set|show`, `/mu_slots generate|delete_date|delete_month`, `/mu_match ...`
 - Table capacity management
 - Auto thread creation per game when a slot is created (and cleanup on cancellation)
 - Match submissions + validation/refusal/cancellation (buttons + `/mu_match`)
+- Config menu with category selector (créneaux / parties / tables)
 - Weekly automation (planned)
 - PostgreSQL persistence + backups (planned)
 
@@ -93,18 +94,19 @@ Enable the following **Privileged Gateway Intents** in the Discord Developer Por
 
 ## Commands
 - `/mu_health` — check bot status
-- `/mu_config show` — show current config (safe fields only)
+- `/mu_config` — open the public configuration menu (expires after 60s)
 - `/mu_tables set <date> <count>` — set tables for a Friday (date format `DD/MM/YYYY`)
 - `/mu_tables show <date>` — show tables for a Friday
 - `/mu_slots generate` — create missing Friday slots for the current month
 - `/mu_slots delete_date <date>` — delete a slot and related matches for a specific date
 - `/mu_slots delete_month` — delete all slots and related matches for the current month
-- `/mu_panel` — show admin buttons (health/config/tables/slots)
 - `/mu_match panel` — show match management panel
 - `/mu_match create <date> <player1> <player2> <game>` — create a match
 - `/mu_match validate <date> <player1> <player2>` — validate a match
 - `/mu_match refuse <date> <player1> <player2> [reason]` — refuse a match
 - `/mu_match cancel <date> <player1> <player2> [reason]` — cancel a match (admin or player)
+
+The `/mu_config` menu also lets admins configure slot days (multiple weekdays), and provides category buttons for slots, matches, and tables.
 
 ## Scenarios (slash + buttons parity)
 All core actions have both a slash command and a button/modals path:
