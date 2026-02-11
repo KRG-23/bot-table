@@ -1,4 +1,4 @@
-import { GameSystem, NotificationType } from "@prisma/client";
+import { NotificationType } from "@prisma/client";
 import dayjs from "dayjs";
 import type { Message } from "discord.js";
 import { ButtonStyle } from "discord.js";
@@ -6,38 +6,17 @@ import type { Logger } from "pino";
 
 import type { AppConfig } from "../config";
 import { getPrisma } from "../db";
+import { listActiveGames, resolveGameFromInput } from "../services/games";
 import { getSlotDays, formatSlotDays, isSlotDay } from "../services/slots";
 import { formatFrenchDate, parseFrenchDayMonth } from "../utils/dates";
 
-const GAME_ALIASES = new Map<string, GameSystem>([
-  ["40k", GameSystem.W40K],
-  ["w40k", GameSystem.W40K],
-  ["wh40k", GameSystem.W40K],
-  ["warhammer 40k", GameSystem.W40K],
-  ["warhammer 40000", GameSystem.W40K],
-  ["aos", GameSystem.AOS],
-  ["age of sigmar", GameSystem.AOS],
-  ["kill team", GameSystem.KILLTEAM],
-  ["killteam", GameSystem.KILLTEAM],
-  ["kt", GameSystem.KILLTEAM],
-  ["autre", GameSystem.AUTRE],
-  ["other", GameSystem.AUTRE]
-]);
-
-const GAME_LABELS: Record<GameSystem, string> = {
-  [GameSystem.W40K]: "40k",
-  [GameSystem.AOS]: "AoS",
-  [GameSystem.KILLTEAM]: "Kill Team",
-  [GameSystem.AUTRE]: "Autre"
-};
-
-const USAGE =
-  "Format attendu : @Munitorum @Joueur1 vs @Joueur2 <jeu> (ex: @Munitorum @Alice vs @Bob 40k). Jeux: 40k, AoS, Kill Team, Autre.";
+const BASE_USAGE =
+  "Format attendu : @Munitorum @Joueur1 vs @Joueur2 <jeu> (ex: @Munitorum @Alice vs @Bob 40k).";
 
 type ParsedMatch = {
   player1Id: string;
   player2Id: string;
-  gameSystem: GameSystem;
+  gameInput: string;
 };
 
 export async function handleMatchMessage(
@@ -53,10 +32,6 @@ export async function handleMatchMessage(
     return;
   }
 
-  if (message.channel.parentId !== config.discordChannelId) {
-    return;
-  }
-
   const botId = message.client.user?.id;
   if (!botId) {
     return;
@@ -68,7 +43,7 @@ export async function handleMatchMessage(
 
   const parsed = parseMatchMessage(message.content, botId);
   if (!parsed) {
-    await message.reply(USAGE);
+    await message.reply(BASE_USAGE);
     return;
   }
 
@@ -92,6 +67,27 @@ export async function handleMatchMessage(
   }
 
   const prisma = getPrisma();
+  const games = await listActiveGames(prisma);
+
+  if (!games.length) {
+    await message.reply("❌ Aucun jeu configuré. Demande à un admin de configurer les jeux.");
+    return;
+  }
+
+  if (
+    !message.channel.parentId ||
+    !games.some((gameItem) => gameItem.channelId === message.channel.parentId)
+  ) {
+    return;
+  }
+
+  const game = await resolveGameFromInput(prisma, parsed.gameInput);
+
+  if (!game) {
+    const gameList = games.map((item) => item.label).join(", ");
+    await message.reply(`❌ Jeu invalide. Jeux disponibles : ${gameList}.`);
+    return;
+  }
   const slotDays = await getSlotDays(prisma);
 
   if (!isSlotDay(threadDate, slotDays)) {
@@ -144,18 +140,24 @@ export async function handleMatchMessage(
       eventId: event.id,
       player1Id: player1.id,
       player2Id: player2.id,
-      gameSystem: parsed.gameSystem,
+      gameId: game.id,
       messageId: message.id
     }
   });
 
-  const gameLabel = GAME_LABELS[parsed.gameSystem];
+  const gameLabel = game.label;
   await message.reply({
     content: `✅ Partie enregistrée : <@${parsed.player1Id}> vs <@${parsed.player2Id}> (${gameLabel}).`,
     components: [buildMatchActionRow(match.id)]
   });
 
-  await sendDmsAndStoreNotifications(message, match.id, parsed, gameLabel, logger);
+  await sendDmsAndStoreNotifications(
+    message,
+    match.id,
+    [parsed.player1Id, parsed.player2Id],
+    gameLabel,
+    logger
+  );
 }
 
 function buildMatchActionRow(matchId: number) {
@@ -193,28 +195,9 @@ function parseMatchMessage(content: string, botId: string): ParsedMatch | null {
 
   const player1Id = match[1];
   const player2Id = match[2];
-  const gameRaw = match[3].trim();
-  const gameSystem = resolveGameSystem(gameRaw);
+  const gameInput = match[3].trim();
 
-  if (!gameSystem) {
-    return null;
-  }
-
-  return { player1Id, player2Id, gameSystem };
-}
-
-function resolveGameSystem(input: string): GameSystem | null {
-  const normalized = normalizeGame(input);
-  return GAME_ALIASES.get(normalized) ?? null;
-}
-
-function normalizeGame(input: string): string {
-  return input
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim();
+  return { player1Id, player2Id, gameInput };
 }
 
 function resolveThreadDate(name: string, tz: string): dayjs.Dayjs | null {
@@ -271,26 +254,21 @@ async function upsertUser(
 async function sendDmsAndStoreNotifications(
   message: Message,
   matchId: number,
-  parsed: ParsedMatch,
+  playerIds: string[],
   gameLabel: string,
   logger: Logger
 ): Promise<void> {
   const prisma = getPrisma();
-  const player1 = message.mentions.users.get(parsed.player1Id);
-  const player2 = message.mentions.users.get(parsed.player2Id);
   const dmContent = `✅ Votre partie ${gameLabel} est enregistrée et en attente de validation.`;
 
   const results = await Promise.all(
-    [player1, player2].map(async (user) => {
-      if (!user) {
-        return { success: false, error: "Utilisateur introuvable" };
-      }
-
+    playerIds.map(async (discordId) => {
       try {
+        const user = await message.client.users.fetch(discordId);
         await user.send(dmContent);
         return { success: true };
       } catch (err) {
-        logger.warn({ err, userId: user.id }, "Failed to send DM");
+        logger.warn({ err, userId: discordId }, "Failed to send DM");
         return { success: false, error: err instanceof Error ? err.message : String(err) };
       }
     })

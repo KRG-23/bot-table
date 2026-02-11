@@ -7,13 +7,6 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum GameSystem {
-  W40K
-  AOS
-  KILLTEAM
-  AUTRE
-}
-
 enum MatchStatus {
   EN_ATTENTE
   VALIDE
@@ -57,6 +50,19 @@ model Event {
   @@index([date])
 }
 
+model Game {
+  id        Int      @id @default(autoincrement())
+  code      String   @unique
+  label     String
+  channelId String
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  matches   Match[]
+  threads   EventThread[]
+}
+
 model Match {
   id          Int          @id @default(autoincrement())
   event       Event        @relation(fields: [eventId], references: [id])
@@ -67,7 +73,8 @@ model Match {
   player2     User         @relation("Player2Matches", fields: [player2Id], references: [id])
   player2Id   Int
 
-  gameSystem  GameSystem
+  game        Game         @relation(fields: [gameId], references: [id])
+  gameId      Int
   status      MatchStatus  @default(EN_ATTENTE)
   messageId   String?
   createdAt   DateTime     @default(now())
@@ -94,11 +101,12 @@ model EventThread {
   id         Int        @id @default(autoincrement())
   event      Event      @relation(fields: [eventId], references: [id])
   eventId    Int
-  gameSystem GameSystem
+  game       Game       @relation(fields: [gameId], references: [id])
+  gameId     Int
   threadId   String
   createdAt  DateTime   @default(now())
 
-  @@unique([eventId, gameSystem])
+  @@unique([eventId, gameId])
   @@index([threadId])
 }
 

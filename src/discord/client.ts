@@ -57,7 +57,7 @@ export function createClient(config: AppConfig, logger: Logger): Client {
         return;
       }
 
-      if (interaction.isStringSelectMenu()) {
+      if (interaction.isStringSelectMenu() || interaction.isChannelSelectMenu()) {
         await handleSelectMenuInteraction(interaction, config, logger);
       }
     } catch (err) {

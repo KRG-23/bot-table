@@ -5,9 +5,10 @@
 Munitorum is a Discord bot for tabletop reservations (Warhammer 40k / AoS / Kill Team). It automates table availability, match submissions, validation, and player notifications.
 
 ## Features (current / planned)
-- Slash commands: `/mu_health`, `/mu_config`, `/mu_tables set|show`, `/mu_slots generate|delete_date|delete_month`, `/mu_match ...`
+- Slash commands: `/mu_health`, `/mu_config`, `/mu_tables set|show`, `/mu_slots generate|set_days|delete_date|delete_month`, `/mu_match ...`, `/mu_games ...`
 - Table capacity management
 - Auto thread creation per game when a slot is created (and cleanup on cancellation)
+- Dynamic game list with per-game thread channel mapping
 - Match submissions + validation/refusal/cancellation (buttons + `/mu_match`)
 - Config menu with category selector (créneaux / parties / tables)
 - Weekly automation (planned)
@@ -98,6 +99,7 @@ Enable the following **Privileged Gateway Intents** in the Discord Developer Por
 - `/mu_tables set <date> <count>` — set tables for a Friday (date format `DD/MM/YYYY`)
 - `/mu_tables show <date>` — show tables for a Friday
 - `/mu_slots generate` — create missing Friday slots for the current month
+- `/mu_slots set_days <days>` — configure slot weekdays (ex: `ven` or `1,3,5`)
 - `/mu_slots delete_date <date>` — delete a slot and related matches for a specific date
 - `/mu_slots delete_month` — delete all slots and related matches for the current month
 - `/mu_match panel` — show match management panel
@@ -105,13 +107,19 @@ Enable the following **Privileged Gateway Intents** in the Discord Developer Por
 - `/mu_match validate <date> <player1> <player2>` — validate a match
 - `/mu_match refuse <date> <player1> <player2> [reason]` — refuse a match
 - `/mu_match cancel <date> <player1> <player2> [reason]` — cancel a match (admin or player)
+- `/mu_games list` — list configured games
+- `/mu_games add <code> <label> <channel>` — add a game
+- `/mu_games set_channel <game> <channel>` — update a game's thread channel
+- `/mu_games disable <game>` — disable a game
+- `/mu_games enable <game>` — enable a game
 
-The `/mu_config` menu also lets admins configure slot days (multiple weekdays), and provides category buttons for slots, matches, and tables.
+The `/mu_config` menu also lets admins configure slot days (multiple weekdays), manage games + channels, and provides category buttons for slots, matches, and tables. New games created from the menu default to `DISCORD_CHANNEL_ID` until reassigned.
 
 ## Scenarios (slash + buttons parity)
 All core actions have both a slash command and a button/modals path:
-- Health + config: `/mu_health`, `/mu_config show` or their buttons
 - Tables + slots: `/mu_tables`, `/mu_slots` or their buttons/modals
+- Slot days: `/mu_slots set_days` or the config modal
+- Games + channels: `/mu_games ...` or the config menu actions
 - Match creation: `/mu_match create` or match panel button (modal)
 - Match validate/refuse/cancel: `/mu_match validate|refuse|cancel` or match buttons
 
@@ -148,6 +156,7 @@ docs/
 - Terms of Service: `/docs/terms-of-service.md`
 - Privacy Policy: `/docs/privacy-policy.md`
 - Development plan: `/docs/plan-action-developpement.md`
+- Discord scenarios: `/docs/scenarios-discord.md`
 
 ## License
 MIT

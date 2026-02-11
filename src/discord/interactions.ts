@@ -1,20 +1,28 @@
-import { GameSystem, MatchStatus, NotificationType } from "@prisma/client";
+import type { Game } from "@prisma/client";
+import { MatchStatus, NotificationType } from "@prisma/client";
 import dayjs from "dayjs";
-import { ButtonStyle, MessageFlags, TextInputStyle } from "discord.js";
+import { ButtonStyle, ChannelType, MessageFlags, TextInputStyle } from "discord.js";
 import type {
   ButtonInteraction,
   ChatInputCommandInteraction,
+  ChannelSelectMenuInteraction,
   InteractionEditReplyOptions,
   InteractionReplyOptions,
   InteractionUpdateOptions,
   ModalSubmitInteraction,
   StringSelectMenuInteraction
 } from "discord.js";
-import type { Message } from "discord.js";
+import type { Channel, Message } from "discord.js";
 import type { Logger } from "pino";
 
 import type { AppConfig } from "../config";
 import { getPrisma } from "../db";
+import {
+  listActiveGames,
+  listAllGames,
+  normalizeGameInput,
+  resolveGameFromInput
+} from "../services/games";
 import {
   SLOT_DAYS_SETTING,
   buildMonthSlots,
@@ -31,48 +39,27 @@ import { isAdminMember } from "./admin";
 type EphemeralInteraction =
   | ChatInputCommandInteraction
   | ButtonInteraction
-  | ModalSubmitInteraction;
+  | ModalSubmitInteraction
+  | StringSelectMenuInteraction
+  | ChannelSelectMenuInteraction;
 
 type PublicInteraction =
   | ChatInputCommandInteraction
   | ButtonInteraction
-  | StringSelectMenuInteraction;
+  | StringSelectMenuInteraction
+  | ChannelSelectMenuInteraction;
+
+type ConfigMenuInteraction = StringSelectMenuInteraction | ChannelSelectMenuInteraction;
+
+type ReplyComponents = InteractionReplyOptions["components"];
+type ReplyComponentRow = NonNullable<ReplyComponents>[number];
 
 type ReplyPayload = {
   content: string;
-  components?: unknown[];
+  components?: ReplyComponents;
 };
 
 type ModalPayload = Parameters<ButtonInteraction["showModal"]>[0];
-const GAME_LABELS: Record<GameSystem, string> = {
-  [GameSystem.W40K]: "40k",
-  [GameSystem.AOS]: "AoS",
-  [GameSystem.KILLTEAM]: "Kill Team",
-  [GameSystem.AUTRE]: "Autre"
-};
-
-const GAME_ALIASES = new Map<string, GameSystem>([
-  ["40k", GameSystem.W40K],
-  ["w40k", GameSystem.W40K],
-  ["wh40k", GameSystem.W40K],
-  ["warhammer 40k", GameSystem.W40K],
-  ["warhammer 40000", GameSystem.W40K],
-  ["aos", GameSystem.AOS],
-  ["age of sigmar", GameSystem.AOS],
-  ["kill team", GameSystem.KILLTEAM],
-  ["killteam", GameSystem.KILLTEAM],
-  ["kt", GameSystem.KILLTEAM],
-  ["autre", GameSystem.AUTRE],
-  ["other", GameSystem.AUTRE]
-]);
-
-const THREAD_GAMES: GameSystem[] = [
-  GameSystem.W40K,
-  GameSystem.AOS,
-  GameSystem.KILLTEAM,
-  GameSystem.AUTRE
-];
-
 const FRENCH_MONTHS = [
   "janvier",
   "février",
@@ -158,6 +145,12 @@ export async function handleInteraction(
       return;
     }
 
+    if (subcommand === "set_days") {
+      const daysInput = interaction.options.getString("days", true);
+      await handleSlotDaysUpdate(interaction, daysInput);
+      return;
+    }
+
     if (subcommand === "delete_date") {
       const dateInput = interaction.options.getString("date", true);
       const parsedDate = parseFrenchDate(dateInput, config.timezone);
@@ -175,6 +168,54 @@ export async function handleInteraction(
 
     if (subcommand === "delete_month") {
       await handleDeleteMonthRequest(interaction, config);
+    }
+  }
+
+  if (interaction.commandName === "mu_games") {
+    if (!interaction.inGuild()) {
+      await replyEphemeral(interaction, { content: "Commande réservée au serveur." });
+      return;
+    }
+
+    if (!interaction.member || !isAdminMember(interaction.member, config)) {
+      await replyEphemeral(interaction, {
+        content: "⛔ Cette commande est réservée aux administrateurs."
+      });
+      return;
+    }
+
+    const subcommand = interaction.options.getSubcommand();
+
+    if (subcommand === "list") {
+      await handleGamesList(interaction);
+      return;
+    }
+
+    if (subcommand === "add") {
+      const code = interaction.options.getString("code", true);
+      const label = interaction.options.getString("label", true);
+      const channel = interaction.options.getChannel("channel", true);
+      await handleGamesAdd(interaction, config, { code, label, channel });
+      return;
+    }
+
+    if (subcommand === "set_channel") {
+      const gameInput = interaction.options.getString("game", true);
+      const channel = interaction.options.getChannel("channel", true);
+      await handleGamesSetChannel(interaction, { gameInput, channel });
+      return;
+    }
+
+    if (subcommand === "disable") {
+      const gameInput = interaction.options.getString("game", true);
+      await handleGamesToggle(interaction, { gameInput, active: false });
+      return;
+    }
+
+    if (subcommand === "enable") {
+      const gameInput = interaction.options.getString("game", true);
+      await handleGamesToggle(interaction, { gameInput, active: true });
+      return;
     }
   }
 
@@ -305,6 +346,86 @@ export async function handleButtonInteraction(
     return;
   }
 
+  if (interaction.customId === "mu_games:configure") {
+    if (!(await ensureAdmin(interaction, config))) {
+      return;
+    }
+
+    const panel = await buildGamesConfigPayload({});
+    await replyEphemeral(interaction, panel);
+    return;
+  }
+
+  if (interaction.customId === "mu_games:add") {
+    if (!(await ensureAdmin(interaction, config))) {
+      return;
+    }
+
+    await showGameAddModal(interaction);
+    return;
+  }
+
+  if (interaction.customId.startsWith("mu_games:save:")) {
+    if (!(await ensureAdmin(interaction, config))) {
+      return;
+    }
+
+    const [gameIdStr, channelId] = interaction.customId.replace("mu_games:save:", "").split(":");
+    const gameId = Number(gameIdStr);
+
+    if (!Number.isInteger(gameId) || !channelId) {
+      await replyEphemeral(interaction, { content: "❌ Configuration invalide." });
+      return;
+    }
+
+    const payload = await handleGamesSaveFromPanel(interaction, {
+      gameId,
+      channelId
+    });
+    await interaction.update(toUpdatePayload(payload));
+    return;
+  }
+
+  if (interaction.customId.startsWith("mu_games:disable:")) {
+    if (!(await ensureAdmin(interaction, config))) {
+      return;
+    }
+
+    const gameId = Number(interaction.customId.replace("mu_games:disable:", ""));
+    if (!Number.isInteger(gameId)) {
+      await replyEphemeral(interaction, { content: "❌ Jeu invalide." });
+      return;
+    }
+
+    const payload = await handleGamesToggleById({
+      gameId,
+      active: false,
+      notice: "✅ Jeu désactivé."
+    });
+    await interaction.update(toUpdatePayload(payload));
+    return;
+  }
+
+  if (interaction.customId.startsWith("mu_games:enable:")) {
+    if (!(await ensureAdmin(interaction, config))) {
+      return;
+    }
+
+    const gameId = Number(interaction.customId.replace("mu_games:enable:", ""));
+    if (!Number.isInteger(gameId)) {
+      await replyEphemeral(interaction, { content: "❌ Jeu invalide." });
+      return;
+    }
+
+    const payload = await handleGamesToggleById({
+      gameId,
+      active: true,
+      notice: "✅ Jeu réactivé."
+    });
+    await interaction.update(toUpdatePayload(payload));
+    return;
+  }
+
   if (interaction.customId === "mu_slots:confirm_delete_month") {
     await handleDeleteMonthConfirm(interaction, config, logger);
     return;
@@ -375,27 +496,65 @@ export async function handleButtonInteraction(
 }
 
 export async function handleSelectMenuInteraction(
-  interaction: StringSelectMenuInteraction,
+  interaction: ConfigMenuInteraction,
   config: AppConfig,
   logger: Logger
 ): Promise<void> {
-  if (interaction.customId !== "mu_config:menu") {
+  if (interaction.customId === "mu_config:menu") {
+    const selection = interaction.values[0] as ConfigCategory | undefined;
+    if (!selection || !CONFIG_CATEGORIES.some((category) => category.value === selection)) {
+      await interaction.update(
+        toUpdatePayload({
+          content: "❌ Catégorie inconnue.",
+          components: [buildConfigMenuSelect()]
+        })
+      );
+      return;
+    }
+
+    const payload = await buildConfigCategoryResponse(selection, config, logger);
+    await interaction.update(toUpdatePayload(payload));
     return;
   }
 
-  const selection = interaction.values[0] as ConfigCategory | undefined;
-  if (!selection || !CONFIG_CATEGORIES.some((category) => category.value === selection)) {
-    await interaction.update(
-      toUpdatePayload({
-        content: "❌ Catégorie inconnue.",
-        components: [buildConfigMenuSelect()]
-      })
-    );
+  if (interaction.customId === "mu_games:select") {
+    if (!(await ensureAdmin(interaction, config))) {
+      return;
+    }
+
+    const selectedId = Number(interaction.values[0]);
+    if (!Number.isInteger(selectedId)) {
+      await replyEphemeral(interaction, { content: "❌ Jeu invalide." });
+      return;
+    }
+
+    const payload = await buildGamesConfigPayload({
+      gameId: selectedId
+    });
+    await interaction.update(toUpdatePayload(payload));
     return;
   }
 
-  const payload = await buildConfigCategoryResponse(selection, config, logger);
-  await interaction.update(toUpdatePayload(payload));
+  if (interaction.customId.startsWith("mu_games:channel:")) {
+    if (!(await ensureAdmin(interaction, config))) {
+      return;
+    }
+
+    const gameIdStr = interaction.customId.replace("mu_games:channel:", "");
+    const gameId = Number(gameIdStr);
+    const channelId = interaction.values[0];
+
+    if (!Number.isInteger(gameId) || !channelId) {
+      await replyEphemeral(interaction, { content: "❌ Sélection invalide." });
+      return;
+    }
+
+    const payload = await buildGamesConfigPayload({
+      gameId,
+      channelId
+    });
+    await interaction.update(toUpdatePayload(payload));
+  }
 }
 
 export async function handleModalSubmit(
@@ -488,24 +647,23 @@ export async function handleModalSubmit(
     }
 
     const daysInput = interaction.fields.getTextInputValue("days");
-    const parsedDays = parseSlotDaysInput(daysInput);
+    await handleSlotDaysUpdate(interaction, daysInput);
+    return;
+  }
 
-    if (parsedDays.length === 0) {
+  if (interaction.customId === "mu_games:add_modal") {
+    if (!interaction.member || !isAdminMember(interaction.member, config)) {
       await replyEphemeral(interaction, {
-        content: "❌ Jours invalides. Utilise des numéros 1-7 ou des jours (ex: lun, mer, ven)."
+        content: "⛔ Cette commande est réservée aux administrateurs."
       });
       return;
     }
 
-    const prisma = getPrisma();
-    await prisma.setting.upsert({
-      where: { key: SLOT_DAYS_SETTING },
-      create: { key: SLOT_DAYS_SETTING, value: parsedDays.join(",") },
-      update: { value: parsedDays.join(",") }
-    });
-
-    await replyEphemeral(interaction, {
-      content: `✅ Jours des créneaux mis à jour : ${formatSlotDays(parsedDays)}`
+    const codeInput = interaction.fields.getTextInputValue("code");
+    const labelInput = interaction.fields.getTextInputValue("label");
+    await handleGamesAdd(interaction, config, {
+      code: codeInput,
+      label: labelInput
     });
     return;
   }
@@ -660,6 +818,249 @@ async function handleConfigMenu(
   const components = [buildConfigMenuSelect()];
   const message = await replyPublic(interaction, { content, components });
   scheduleConfigMenuExpiry(message, logger);
+}
+
+type GameAddInput = {
+  code: string;
+  label: string;
+  channel?: Channel;
+};
+
+type GameChannelInput = {
+  gameInput: string;
+  channel: Channel;
+};
+
+type GameToggleInput = {
+  gameInput: string;
+  active: boolean;
+};
+
+type GameToggleByIdInput = {
+  gameId: number;
+  active: boolean;
+  notice: string;
+};
+
+type GameSaveInput = {
+  gameId: number;
+  channelId: string;
+};
+
+function sanitizeGameCode(input: string): string {
+  return input
+    .trim()
+    .toUpperCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^A-Z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
+function isValidGameChannel(channel: Channel): boolean {
+  return channel.type === ChannelType.GuildText || channel.type === ChannelType.GuildAnnouncement;
+}
+
+async function handleGamesList(interaction: EphemeralInteraction): Promise<void> {
+  const prisma = getPrisma();
+  const games = await listAllGames(prisma);
+  const orderedGames = [...games].sort(
+    (a, b) => Number(b.active) - Number(a.active) || a.label.localeCompare(b.label, "fr")
+  );
+
+  if (orderedGames.length === 0) {
+    await replyEphemeral(interaction, {
+      content: "Aucun jeu configuré. Utilise /mu_games add ou le menu /mu_config."
+    });
+    return;
+  }
+
+  await replyEphemeral(interaction, {
+    content: [
+      `Jeux configurés (${orderedGames.length}) :`,
+      orderedGames.map(formatGameLine).join("\n")
+    ].join("\n")
+  });
+}
+
+async function handleGamesAdd(
+  interaction: EphemeralInteraction,
+  config: AppConfig,
+  input: GameAddInput
+): Promise<void> {
+  const code = sanitizeGameCode(input.code);
+  const label = input.label.trim();
+
+  if (!code || !label) {
+    await replyEphemeral(interaction, {
+      content: "❌ Code ou libellé invalide. Ex: code W40K, libellé Warhammer 40k."
+    });
+    return;
+  }
+
+  if (input.channel && !isValidGameChannel(input.channel)) {
+    await replyEphemeral(interaction, {
+      content: "❌ Canal invalide. Choisis un canal texte ou d'annonces."
+    });
+    return;
+  }
+
+  const prisma = getPrisma();
+  const existing = await prisma.game.findMany();
+  const normalizedCode = normalizeGameInput(code);
+  const normalizedLabel = normalizeGameInput(label);
+  const duplicate = existing.find(
+    (game) =>
+      normalizeGameInput(game.code) === normalizedCode ||
+      normalizeGameInput(game.label) === normalizedLabel
+  );
+
+  if (duplicate) {
+    await replyEphemeral(interaction, {
+      content: "❌ Ce code ou libellé est déjà utilisé."
+    });
+    return;
+  }
+
+  const channelId = input.channel?.id ?? config.discordChannelId;
+  const game = await prisma.game.create({
+    data: {
+      code,
+      label,
+      channelId,
+      active: true
+    }
+  });
+
+  const panel = await buildGamesConfigPayload({
+    gameId: game.id,
+    channelId: game.channelId,
+    notice: "✅ Jeu ajouté."
+  });
+  await replyEphemeral(interaction, panel);
+}
+
+async function handleGamesSetChannel(
+  interaction: EphemeralInteraction,
+  input: GameChannelInput
+): Promise<void> {
+  if (!isValidGameChannel(input.channel)) {
+    await replyEphemeral(interaction, {
+      content: "❌ Canal invalide. Choisis un canal texte ou d'annonces."
+    });
+    return;
+  }
+
+  const prisma = getPrisma();
+  const game = await resolveGameFromInput(prisma, input.gameInput, true);
+
+  if (!game) {
+    await replyEphemeral(interaction, {
+      content: "❌ Jeu introuvable."
+    });
+    return;
+  }
+
+  await prisma.game.update({
+    where: { id: game.id },
+    data: { channelId: input.channel.id }
+  });
+
+  const panel = await buildGamesConfigPayload({
+    gameId: game.id,
+    channelId: input.channel.id,
+    notice: "✅ Canal mis à jour."
+  });
+  await replyEphemeral(interaction, panel);
+}
+
+async function handleGamesToggle(
+  interaction: EphemeralInteraction,
+  input: GameToggleInput
+): Promise<void> {
+  const prisma = getPrisma();
+  const game = await resolveGameFromInput(prisma, input.gameInput, true);
+
+  if (!game) {
+    await replyEphemeral(interaction, {
+      content: "❌ Jeu introuvable."
+    });
+    return;
+  }
+
+  await prisma.game.update({
+    where: { id: game.id },
+    data: { active: input.active }
+  });
+
+  const panel = await buildGamesConfigPayload({
+    gameId: game.id,
+    channelId: game.channelId,
+    notice: input.active ? "✅ Jeu réactivé." : "✅ Jeu désactivé."
+  });
+  await replyEphemeral(interaction, panel);
+}
+
+async function handleGamesSaveFromPanel(
+  interaction: ButtonInteraction,
+  input: GameSaveInput
+): Promise<ReplyPayload> {
+  const prisma = getPrisma();
+  const game = await prisma.game.findUnique({ where: { id: input.gameId } });
+
+  if (!game) {
+    return {
+      content: "❌ Jeu introuvable.",
+      components: []
+    };
+  }
+
+  const channel =
+    input.channelId === "none"
+      ? null
+      : await interaction.client.channels.fetch(input.channelId).catch(() => null);
+
+  if (!channel || !isValidGameChannel(channel)) {
+    return buildGamesConfigPayload({
+      gameId: game.id,
+      channelId: game.channelId,
+      notice: "❌ Canal invalide."
+    });
+  }
+
+  await prisma.game.update({
+    where: { id: game.id },
+    data: { channelId: channel.id }
+  });
+
+  return buildGamesConfigPayload({
+    gameId: game.id,
+    channelId: channel.id,
+    notice: "✅ Canal mis à jour."
+  });
+}
+
+async function handleGamesToggleById(input: GameToggleByIdInput): Promise<ReplyPayload> {
+  const prisma = getPrisma();
+  const game = await prisma.game.findUnique({ where: { id: input.gameId } });
+
+  if (!game) {
+    return {
+      content: "❌ Jeu introuvable.",
+      components: []
+    };
+  }
+
+  await prisma.game.update({
+    where: { id: game.id },
+    data: { active: input.active }
+  });
+
+  return buildGamesConfigPayload({
+    gameId: game.id,
+    channelId: game.channelId,
+    notice: input.notice
+  });
 }
 
 async function handleTablesSet(
@@ -923,6 +1324,31 @@ async function handleDeleteMonthRequest(
   });
 }
 
+async function handleSlotDaysUpdate(
+  interaction: EphemeralInteraction,
+  daysInput: string
+): Promise<void> {
+  const parsedDays = parseSlotDaysInput(daysInput);
+
+  if (parsedDays.length === 0) {
+    await replyEphemeral(interaction, {
+      content: "❌ Jours invalides. Utilise des numéros 1-7 ou des jours (ex: lun, mer, ven)."
+    });
+    return;
+  }
+
+  const prisma = getPrisma();
+  await prisma.setting.upsert({
+    where: { key: SLOT_DAYS_SETTING },
+    create: { key: SLOT_DAYS_SETTING, value: parsedDays.join(",") },
+    update: { value: parsedDays.join(",") }
+  });
+
+  await replyEphemeral(interaction, {
+    content: `✅ Jours des créneaux mis à jour : ${formatSlotDays(parsedDays)}`
+  });
+}
+
 async function handleDeleteDateConfirm(
   interaction: EphemeralInteraction,
   config: AppConfig,
@@ -1062,17 +1488,19 @@ async function handleMatchCreate(
     return;
   }
 
-  const gameSystem = resolveGameSystemInput(input.gameInput);
-  if (!gameSystem) {
+  const prisma = getPrisma();
+  const game = await resolveGameFromInput(prisma, input.gameInput);
+  if (!game) {
+    const games = await listActiveGames(prisma);
+    const gameList = games.length ? games.map((item) => item.label).join(", ") : "Aucun";
     await replyEphemeral(interaction, {
-      content: "❌ Jeu invalide. Choisis 40k, AoS, Kill Team, ou Autre."
+      content: `❌ Jeu invalide. Jeux disponibles : ${gameList}.`
     });
     return;
   }
 
   await replyEphemeral(interaction, { content: "⏳ Création de la partie..." });
 
-  const prisma = getPrisma();
   const slotDays = await getSlotDays(prisma);
 
   if (!isSlotDay(parsedDate, slotDays)) {
@@ -1130,11 +1558,11 @@ async function handleMatchCreate(
       eventId: event.id,
       player1Id: player1.id,
       player2Id: player2.id,
-      gameSystem
+      gameId: game.id
     }
   });
 
-  const gameLabel = GAME_LABELS[gameSystem];
+  const gameLabel = game.label;
   await interaction.editReply({
     content: `✅ Partie enregistrée : <@${input.player1Id}> vs <@${input.player2Id}> (${gameLabel}).`,
     components: [buildMatchActionRow(match.id)]
@@ -1406,8 +1834,8 @@ function buildSlotsCategoryRows() {
         },
         {
           type: 2,
-          custom_id: "mu_slots:generate_current_month",
-          label: "Générer le mois",
+          custom_id: "mu_games:configure",
+          label: "Configurer jeux & canaux",
           style: ButtonStyle.Secondary
         }
       ]
@@ -1415,6 +1843,12 @@ function buildSlotsCategoryRows() {
     {
       type: 1,
       components: [
+        {
+          type: 2,
+          custom_id: "mu_slots:generate_current_month",
+          label: "Générer le mois",
+          style: ButtonStyle.Secondary
+        },
         {
           type: 2,
           custom_id: "mu_slots:delete_month",
@@ -1493,6 +1927,167 @@ function buildTablesCategoryRows() {
   ];
 }
 
+type GameConfigState = {
+  gameId?: number;
+  channelId?: string;
+  notice?: string;
+};
+
+function formatGameStatus(game: Game): string {
+  return game.active ? "actif" : "désactivé";
+}
+
+function formatGameLine(game: Game): string {
+  return `• ${game.label} (${game.code}) — <#${game.channelId}> — ${formatGameStatus(game)}`;
+}
+
+function buildGamesSelectRow(games: Game[], selectedId: number): ReplyComponentRow {
+  return {
+    type: 1,
+    components: [
+      {
+        type: 3,
+        custom_id: "mu_games:select",
+        placeholder: "Choisir un jeu",
+        min_values: 1,
+        max_values: 1,
+        options: games.map((game) => ({
+          label: game.label,
+          value: String(game.id),
+          description: `${game.code} · ${formatGameStatus(game)}`,
+          default: game.id === selectedId
+        }))
+      }
+    ]
+  } as ReplyComponentRow;
+}
+
+function buildGamesChannelRow(gameId: number, channelId?: string): ReplyComponentRow {
+  const component: {
+    type: number;
+    custom_id: string;
+    placeholder: string;
+    min_values: number;
+    max_values: number;
+    channel_types: ChannelType[];
+    default_values?: { id: string; type: "channel" }[];
+  } = {
+    type: 8,
+    custom_id: `mu_games:channel:${gameId}`,
+    placeholder: "Choisir un canal",
+    min_values: 1,
+    max_values: 1,
+    channel_types: [ChannelType.GuildText, ChannelType.GuildAnnouncement]
+  };
+
+  if (channelId) {
+    component.default_values = [{ id: channelId, type: "channel" }];
+  }
+
+  return {
+    type: 1,
+    components: [component]
+  } as ReplyComponentRow;
+}
+
+function buildGamesActionRow(game: Game, channelId?: string): ReplyComponentRow {
+  const canSave = Boolean(channelId);
+  const toggle = game.active
+    ? {
+        type: 2,
+        custom_id: `mu_games:disable:${game.id}`,
+        label: "Désactiver",
+        style: ButtonStyle.Secondary
+      }
+    : {
+        type: 2,
+        custom_id: `mu_games:enable:${game.id}`,
+        label: "Réactiver",
+        style: ButtonStyle.Success
+      };
+
+  return {
+    type: 1,
+    components: [
+      {
+        type: 2,
+        custom_id: `mu_games:save:${game.id}:${channelId ?? "none"}`,
+        label: "Enregistrer",
+        style: ButtonStyle.Primary,
+        disabled: !canSave
+      },
+      toggle,
+      {
+        type: 2,
+        custom_id: "mu_games:add",
+        label: "Ajouter un jeu",
+        style: ButtonStyle.Secondary
+      }
+    ]
+  } as ReplyComponentRow;
+}
+
+function buildGamesEmptyRow(): ReplyComponentRow {
+  return {
+    type: 1,
+    components: [
+      {
+        type: 2,
+        custom_id: "mu_games:add",
+        label: "Ajouter un jeu",
+        style: ButtonStyle.Primary
+      }
+    ]
+  } as ReplyComponentRow;
+}
+
+async function buildGamesConfigPayload(state: GameConfigState): Promise<ReplyPayload> {
+  const prisma = getPrisma();
+  const games = await listAllGames(prisma);
+
+  if (games.length === 0) {
+    return {
+      content: [
+        "**Jeux & canaux**",
+        state.notice,
+        "Aucun jeu configuré pour le moment.",
+        "Ajoute un jeu et associe-lui un canal."
+      ]
+        .filter(Boolean)
+        .join("\n"),
+      components: [buildGamesEmptyRow()]
+    };
+  }
+
+  const selectedGame =
+    orderedGames.find((game) => game.id === state.gameId) ??
+    orderedGames.find((game) => game.active) ??
+    orderedGames[0];
+  const selectedChannelId = state.channelId ?? selectedGame.channelId;
+
+  return {
+    content: [
+      "**Jeux & canaux**",
+      "Sélectionne un jeu puis le canal où créer les fils de discussion.",
+      "Chaque jeu doit avoir un canal associé.",
+      state.notice,
+      "",
+      `Jeu sélectionné : ${selectedGame.label} (${selectedGame.code})`,
+      `Canal sélectionné : <#${selectedChannelId}>`,
+      "",
+      "Jeux configurés :",
+      orderedGames.map(formatGameLine).join("\n")
+    ]
+      .filter(Boolean)
+      .join("\n"),
+    components: [
+      buildGamesSelectRow(orderedGames, selectedGame.id),
+      buildGamesChannelRow(selectedGame.id, selectedChannelId),
+      buildGamesActionRow(selectedGame, selectedChannelId)
+    ]
+  };
+}
+
 function buildMatchPanel(): ReplyPayload {
   return {
     content: [
@@ -1556,9 +2151,18 @@ function formatFrenchMonthYear(date: dayjs.Dayjs): string {
   return `${month} ${date.year()}`;
 }
 
+function formatGamesInline(games: Game[]): string {
+  if (games.length === 0) {
+    return "Aucun";
+  }
+
+  return games.map((game) => game.label).join(", ");
+}
+
 async function buildConfigMenuContent(config: AppConfig, logger: Logger): Promise<string> {
   const prisma = getPrisma();
   const slotDays = await getSlotDays(prisma);
+  const games = await listActiveGames(prisma);
   const now = dayjs().tz(config.timezone);
   const offset = now.format("Z");
   const slotsOverview = await buildMonthSlotsOverview(config, logger, slotDays);
@@ -1572,6 +2176,7 @@ async function buildConfigMenuContent(config: AppConfig, logger: Logger): Promis
     "Langue : Français",
     `Fuseau horaire : (UTC${offset}) ${config.timezone}`,
     `Jours des créneaux : ${formatSlotDays(slotDays)}`,
+    `Jeux actifs : ${formatGamesInline(games)}`,
     "",
     `Créneaux du mois (${formatFrenchMonthYear(now)})`,
     slotsOverview
@@ -1586,12 +2191,14 @@ async function buildConfigCategoryResponse(
   if (category === "slots") {
     const prisma = getPrisma();
     const slotDays = await getSlotDays(prisma);
+    const games = await listActiveGames(prisma);
     const slotsOverview = await buildMonthSlotsOverview(config, logger, slotDays);
 
     return {
       content: [
         buildConfigCategoryContent("**Créneaux**"),
         `Jours actifs : ${formatSlotDays(slotDays)}`,
+        `Jeux actifs : ${formatGamesInline(games)}`,
         "",
         `Créneaux du mois (${formatFrenchMonthYear(dayjs().tz(config.timezone))})`,
         slotsOverview
@@ -1691,13 +2298,13 @@ function buildMatchSummary(
   match: {
     player1: { discordId: string };
     player2: { discordId: string };
-    gameSystem: GameSystem;
+    game: { label: string };
     event: { date: Date };
   },
   config: AppConfig
 ) {
   const eventDate = dayjs(match.event.date).tz(config.timezone);
-  const gameLabel = GAME_LABELS[match.gameSystem];
+  const gameLabel = match.game.label;
   return `${formatFrenchDate(eventDate)} — <@${match.player1.discordId}> vs <@${match.player2.discordId}> (${gameLabel})`;
 }
 
@@ -1706,26 +2313,8 @@ function formatThreadDayMonth(date: dayjs.Dayjs): string {
   return `${date.date()} ${month}`;
 }
 
-function buildThreadName(game: GameSystem, date: dayjs.Dayjs): string {
-  return `Soirée ${GAME_LABELS[game]} le ${formatThreadDayMonth(date)}`;
-}
-
-function normalizeGameInput(input: string): string {
-  return input
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim();
-}
-
-function resolveGameSystemInput(input: string): GameSystem | null {
-  if (Object.values(GameSystem).includes(input as GameSystem)) {
-    return input as GameSystem;
-  }
-
-  const normalized = normalizeGameInput(input);
-  return GAME_ALIASES.get(normalized) ?? null;
+function buildThreadName(game: Game, date: dayjs.Dayjs): string {
+  return `Soirée ${game.label} le ${formatThreadDayMonth(date)}`;
 }
 
 function parseUserIdInput(input: string): string | null {
@@ -1776,30 +2365,33 @@ async function ensureEventThreads(
   event: { id: number; date: Date }
 ): Promise<void> {
   const prisma = getPrisma();
-  const channel = await interaction.client.channels.fetch(config.discordChannelId);
-
-  if (!isSendableChannel(channel)) {
-    logger.warn({ channelId: config.discordChannelId }, "Channel not found or not sendable");
-    return;
-  }
-
-  if (channel.isThread?.()) {
-    logger.warn({ channelId: config.discordChannelId }, "Configured channel is a thread");
-    return;
-  }
-
   const existing = await prisma.eventThread.findMany({ where: { eventId: event.id } });
-  const existingGames = new Set(existing.map((thread) => thread.gameSystem));
+  const existingGames = new Set(existing.map((thread) => thread.gameId));
   const eventDate = dayjs(event.date).tz(config.timezone);
+  const games = await listActiveGames(prisma);
 
-  for (const game of THREAD_GAMES) {
-    if (existingGames.has(game)) {
+  for (const game of games) {
+    if (existingGames.has(game.id)) {
       continue;
     }
 
-    const gameLabel = GAME_LABELS[game];
     const threadName = buildThreadName(game, eventDate);
-    const starterContent = `Créneau ${gameLabel} — ${formatFrenchDate(eventDate)}.`;
+    const starterContent = `Créneau ${game.label} — ${formatFrenchDate(eventDate)}.`;
+
+    const channel = await interaction.client.channels.fetch(game.channelId);
+
+    if (!isSendableChannel(channel)) {
+      logger.warn(
+        { channelId: game.channelId, gameId: game.id },
+        "Channel not found or not sendable"
+      );
+      continue;
+    }
+
+    if (channel.isThread?.()) {
+      logger.warn({ channelId: game.channelId, gameId: game.id }, "Configured channel is a thread");
+      continue;
+    }
 
     try {
       const starter = await channel.send({ content: starterContent });
@@ -1816,12 +2408,12 @@ async function ensureEventThreads(
       await prisma.eventThread.create({
         data: {
           eventId: event.id,
-          gameSystem: game,
+          gameId: game.id,
           threadId: thread.id
         }
       });
     } catch (err) {
-      logger.warn({ err, game, eventId: event.id }, "Failed to create thread");
+      logger.warn({ err, gameId: game.id, eventId: event.id }, "Failed to create thread");
     }
   }
 }
@@ -1908,7 +2500,7 @@ async function performMatchValidate(
   const prisma = getPrisma();
   const match = await prisma.match.findUnique({
     where: { id: matchId },
-    include: { player1: true, player2: true, event: true }
+    include: { player1: true, player2: true, event: true, game: true }
   });
 
   if (!match) {
@@ -1966,7 +2558,7 @@ async function performMatchRefuse(
   const prisma = getPrisma();
   const match = await prisma.match.findUnique({
     where: { id: matchId },
-    include: { player1: true, player2: true, event: true }
+    include: { player1: true, player2: true, event: true, game: true }
   });
 
   if (!match) {
@@ -2016,7 +2608,7 @@ async function performMatchCancel(
   const prisma = getPrisma();
   const match = await prisma.match.findUnique({
     where: { id: matchId },
-    include: { player1: true, player2: true, event: true }
+    include: { player1: true, player2: true, event: true, game: true }
   });
 
   if (!match) {
@@ -2356,6 +2948,48 @@ async function showSlotDaysModal(interaction: ButtonInteraction, config: AppConf
             style: TextInputStyle.Short,
             required: true,
             placeholder: "ven"
+          }
+        ]
+      }
+    ]
+  };
+
+  await interaction.showModal(modal as ModalPayload);
+}
+
+async function showGameAddModal(interaction: ButtonInteraction): Promise<void> {
+  if (!interaction.inGuild()) {
+    await replyEphemeral(interaction, { content: "Commande réservée au serveur." });
+    return;
+  }
+
+  const modal = {
+    custom_id: "mu_games:add_modal",
+    title: "Ajouter un jeu",
+    components: [
+      {
+        type: 1,
+        components: [
+          {
+            type: 4,
+            custom_id: "code",
+            label: "Code court (ex: W40K)",
+            style: TextInputStyle.Short,
+            required: true,
+            placeholder: "W40K"
+          }
+        ]
+      },
+      {
+        type: 1,
+        components: [
+          {
+            type: 4,
+            custom_id: "label",
+            label: "Libellé",
+            style: TextInputStyle.Short,
+            required: true,
+            placeholder: "Warhammer 40k"
           }
         ]
       }

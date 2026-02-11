@@ -62,6 +62,19 @@ export const commands = [
         type: ApplicationCommandOptionType.Subcommand
       },
       {
+        name: "set_days",
+        description: "Configurer les jours actifs des créneaux",
+        type: ApplicationCommandOptionType.Subcommand,
+        options: [
+          {
+            name: "days",
+            description: "Jours (ex: ven, lun/mer, 1,5,7)",
+            type: ApplicationCommandOptionType.String,
+            required: true
+          }
+        ]
+      },
+      {
         name: "delete_date",
         description: "Supprimer un créneau (et ses parties) pour une date précise",
         type: ApplicationCommandOptionType.Subcommand,
@@ -116,15 +129,9 @@ export const commands = [
           },
           {
             name: "game",
-            description: "Jeu",
+            description: "Code ou libellé du jeu",
             type: ApplicationCommandOptionType.String,
-            required: true,
-            choices: [
-              { name: "Warhammer 40k", value: "W40K" },
-              { name: "Age of Sigmar", value: "AOS" },
-              { name: "Kill Team", value: "KILLTEAM" },
-              { name: "Autre", value: "AUTRE" }
-            ]
+            required: true
           }
         ]
       },
@@ -212,6 +219,88 @@ export const commands = [
             description: "Raison de l'annulation (optionnel)",
             type: ApplicationCommandOptionType.String,
             required: false
+          }
+        ]
+      }
+    ]
+  },
+  {
+    name: "mu_games",
+    description: "Gérer les jeux et canaux",
+    type: ApplicationCommandType.ChatInput,
+    options: [
+      {
+        name: "list",
+        description: "Lister les jeux configurés",
+        type: ApplicationCommandOptionType.Subcommand
+      },
+      {
+        name: "add",
+        description: "Ajouter un jeu",
+        type: ApplicationCommandOptionType.Subcommand,
+        options: [
+          {
+            name: "code",
+            description: "Code court (ex: W40K)",
+            type: ApplicationCommandOptionType.String,
+            required: true
+          },
+          {
+            name: "label",
+            description: "Libellé (ex: Warhammer 40k)",
+            type: ApplicationCommandOptionType.String,
+            required: true
+          },
+          {
+            name: "channel",
+            description: "Canal où créer les fils",
+            type: ApplicationCommandOptionType.Channel,
+            required: true
+          }
+        ]
+      },
+      {
+        name: "set_channel",
+        description: "Associer un canal à un jeu",
+        type: ApplicationCommandOptionType.Subcommand,
+        options: [
+          {
+            name: "game",
+            description: "Code ou libellé du jeu",
+            type: ApplicationCommandOptionType.String,
+            required: true
+          },
+          {
+            name: "channel",
+            description: "Canal où créer les fils",
+            type: ApplicationCommandOptionType.Channel,
+            required: true
+          }
+        ]
+      },
+      {
+        name: "disable",
+        description: "Désactiver un jeu",
+        type: ApplicationCommandOptionType.Subcommand,
+        options: [
+          {
+            name: "game",
+            description: "Code ou libellé du jeu",
+            type: ApplicationCommandOptionType.String,
+            required: true
+          }
+        ]
+      },
+      {
+        name: "enable",
+        description: "Réactiver un jeu",
+        type: ApplicationCommandOptionType.Subcommand,
+        options: [
+          {
+            name: "game",
+            description: "Code ou libellé du jeu",
+            type: ApplicationCommandOptionType.String,
+            required: true
           }
         ]
       }
