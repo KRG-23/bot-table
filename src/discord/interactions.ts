@@ -10,8 +10,7 @@ import type {
   InteractionReplyOptions,
   InteractionUpdateOptions,
   ModalSubmitInteraction,
-  StringSelectMenuInteraction,
-  TextBasedChannel
+  StringSelectMenuInteraction
 } from "discord.js";
 import type { Message } from "discord.js";
 import type { Logger } from "pino";
@@ -289,9 +288,12 @@ export async function handleInteraction(
   }
 }
 
-function getTextChannel(channel: ChannelWithText): TextBasedChannel | null {
-  if (channel && channel.isTextBased()) {
-    return channel as TextBasedChannel;
+function getSendableChannel(channel: ChannelWithText): SendableChannel | null {
+  if (!channel || !channel.isTextBased()) {
+    return null;
+  }
+  if ("send" in channel && typeof channel.send === "function") {
+    return channel as SendableChannel;
   }
   return null;
 }
@@ -336,7 +338,7 @@ export async function handleButtonInteraction(
       return;
     }
 
-    const channel = getTextChannel(interaction.channel);
+    const channel = getSendableChannel(interaction.channel);
     if (channel) {
       const message = await channel.send({
         content: payload.content,
@@ -554,6 +556,10 @@ export async function handleSelectMenuInteraction(
   logger: Logger
 ): Promise<void> {
   if (interaction.customId === "mu_config:menu") {
+    const ageMs = Date.now() - interaction.createdTimestamp;
+    if (ageMs > 2500) {
+      return;
+    }
     await interaction.deferUpdate();
     const selection = interaction.values[0] as ConfigCategory | undefined;
     if (!selection || !CONFIG_CATEGORIES.some((category) => category.value === selection)) {
@@ -869,6 +875,20 @@ async function handleConfigMenu(
     return;
   }
 
+  const ageMs = Date.now() - interaction.createdTimestamp;
+  if (ageMs > 2500) {
+    const payload = await buildConfigCategoryResponse("home", config, logger);
+    const channel = getSendableChannel(interaction.channel);
+    if (channel) {
+      const message = await channel.send({
+        content: payload.content,
+        components: payload.components as ReplyComponents
+      });
+      scheduleConfigMenuExpiry(message, logger);
+    }
+    return;
+  }
+
   let acknowledged = false;
   if ("replied" in interaction && interaction.replied) {
     acknowledged = true;
@@ -896,7 +916,7 @@ async function handleConfigMenu(
     }
   }
 
-  const channel = getTextChannel(interaction.channel);
+  const channel = getSendableChannel(interaction.channel);
   if (channel) {
     const message = await channel.send({
       content: payload.content,
@@ -2529,7 +2549,7 @@ function parseUserIdInput(input: string): string | null {
 }
 
 type SendableChannel = {
-  send: (payload: { content: string }) => Promise<unknown>;
+  send: (payload: { content: string; components?: ReplyComponents }) => Promise<Message>;
   isThread?: () => boolean;
 };
 
