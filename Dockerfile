@@ -9,6 +9,10 @@ FROM base AS deps
 COPY package*.json ./
 COPY prisma ./prisma
 ENV npm_config_cache=/root/.npm
+ENV npm_config_fetch_retries=5 \
+  npm_config_fetch_retry_mintimeout=10000 \
+  npm_config_fetch_retry_maxtimeout=120000 \
+  npm_config_fetch_timeout=600000
 RUN --mount=type=cache,target=/root/.npm \
   PRISMA_SKIP_POSTINSTALL=1 npm ci --prefer-offline --no-audit
 
