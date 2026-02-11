@@ -514,6 +514,7 @@ export async function handleSelectMenuInteraction(
 
     const payload = await buildConfigCategoryResponse(selection, config, logger);
     await interaction.update(toUpdatePayload(payload));
+    scheduleConfigMenuExpiry(interaction.message as Message, logger);
     return;
   }
 
@@ -1359,11 +1360,13 @@ async function handleDeleteDateConfirm(
     return;
   }
 
+  await replyEphemeral(interaction, { content: "⏳ Suppression du créneau en cours..." });
+
   const prisma = getPrisma();
   const event = await prisma.event.findUnique({ where: { date: date.toDate() } });
 
   if (!event) {
-    await replyEphemeral(interaction, {
+    await interaction.editReply({
       content: `ℹ️ Aucun créneau trouvé pour le ${formatFrenchDate(date)}.`
     });
     return;
@@ -1392,7 +1395,7 @@ async function handleDeleteDateConfirm(
     logger,
     threads.map((thread) => thread.threadId)
   );
-  await replyEphemeral(interaction, {
+  await interaction.editReply({
     content: `🗑️ Créneau du ${formatFrenchDate(date)} supprimé (parties et notifications incluses).`
   });
 }
@@ -1405,6 +1408,8 @@ async function handleDeleteMonthConfirm(
   if (!(await ensureAdmin(interaction, config))) {
     return;
   }
+
+  await replyEphemeral(interaction, { content: "⏳ Suppression des créneaux du mois en cours..." });
 
   const prisma = getPrisma();
   const now = dayjs().tz(config.timezone);
@@ -1421,7 +1426,7 @@ async function handleDeleteMonthConfirm(
   });
 
   if (events.length === 0) {
-    await replyEphemeral(interaction, {
+    await interaction.editReply({
       content: `ℹ️ Aucun créneau trouvé pour ${now.format("MM/YYYY")}.`
     });
     return;
@@ -1451,7 +1456,7 @@ async function handleDeleteMonthConfirm(
     logger,
     threads.map((thread) => thread.threadId)
   );
-  await replyEphemeral(interaction, {
+  await interaction.editReply({
     content: `🗑️ Créneaux du mois ${now.format("MM/YYYY")} supprimés (parties et notifications incluses).`
   });
 }
