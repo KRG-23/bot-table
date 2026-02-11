@@ -508,10 +508,11 @@ export async function handleSelectMenuInteraction(
   logger: Logger
 ): Promise<void> {
   if (interaction.customId === "mu_config:menu") {
+    await interaction.deferUpdate();
     const selection = interaction.values[0] as ConfigCategory | undefined;
     if (!selection || !CONFIG_CATEGORIES.some((category) => category.value === selection)) {
-      await interaction.update(
-        toUpdatePayload({
+      await interaction.editReply(
+        toEditPayload({
           content: "❌ Catégorie inconnue.",
           components: [buildConfigMenuSelect()]
         })
@@ -520,7 +521,7 @@ export async function handleSelectMenuInteraction(
     }
 
     const payload = await buildConfigCategoryResponse(selection, config, logger);
-    await interaction.update(toUpdatePayload(payload));
+    await interaction.editReply(toEditPayload(payload));
     scheduleConfigMenuExpiry(interaction.message as Message, logger);
     return;
   }
@@ -822,10 +823,32 @@ async function handleConfigMenu(
     return;
   }
 
+  let acknowledged = false;
+  if ("deferred" in interaction && !interaction.deferred && !interaction.replied) {
+    try {
+      await interaction.deferReply();
+      acknowledged = true;
+    } catch (err) {
+      logger.warn({ err }, "Failed to defer config menu interaction");
+    }
+  } else if ("replied" in interaction && interaction.replied) {
+    acknowledged = true;
+  }
+
   const content = await buildConfigMenuContent(config, logger);
   const components = [buildConfigMenuSelect()];
-  const message = await replyPublic(interaction, { content, components });
-  scheduleConfigMenuExpiry(message, logger);
+
+  if (acknowledged) {
+    await interaction.editReply(toEditPayload({ content, components }));
+    const message = await interaction.fetchReply();
+    scheduleConfigMenuExpiry(message as Message, logger);
+    return;
+  }
+
+  if (interaction.channel?.isTextBased()) {
+    const message = await interaction.channel.send({ content, components });
+    scheduleConfigMenuExpiry(message, logger);
+  }
 }
 
 type GameAddInput = {

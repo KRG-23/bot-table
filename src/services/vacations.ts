@@ -28,6 +28,7 @@ type CachedVacations = {
 };
 
 let cache: CachedVacations | null = null;
+let inFlight: Promise<VacationRecord[]> | null = null;
 
 function normalize(value: string): string {
   return value
@@ -41,54 +42,66 @@ async function fetchVacations(academy: string, logger: Logger): Promise<Vacation
     return cache.records;
   }
 
+  if (inFlight) {
+    return inFlight;
+  }
+
   const records: VacationRecord[] = [];
   const limit = 100;
   let offset = 0;
 
-  while (true) {
-    const url = new URL(API_BASE);
+  inFlight = (async () => {
+    while (true) {
+      const url = new URL(API_BASE);
 
-    url.searchParams.set("limit", String(limit));
-    url.searchParams.set("offset", String(offset));
-    url.searchParams.append("refine", `location:${academy}`);
-    url.searchParams.set("timezone", "Europe/Paris");
+      url.searchParams.set("limit", String(limit));
+      url.searchParams.set("offset", String(offset));
+      url.searchParams.append("refine", `location:${academy}`);
+      url.searchParams.set("timezone", "Europe/Paris");
 
-    const response = await fetch(url.toString());
+      const response = await fetch(url.toString());
 
-    if (!response.ok) {
-      throw new Error(`Vacation API error: ${response.status} ${response.statusText}`);
+      if (!response.ok) {
+        throw new Error(`Vacation API error: ${response.status} ${response.statusText}`);
+      }
+
+      const data = (await response.json()) as { results?: VacationRecord[]; total_count?: number };
+      const batch = data.results ?? [];
+
+      records.push(...batch);
+
+      if (batch.length < limit) {
+        break;
+      }
+
+      offset += limit;
     }
 
-    const data = (await response.json()) as { results?: VacationRecord[]; total_count?: number };
-    const batch = data.results ?? [];
+    const academyNorm = normalize(academy);
+    const filtered = records.filter((record) => {
+      const populationNorm = normalize(record.population ?? "");
+      const populationAllowed = POPULATION_VALUES.some(
+        (value) => normalize(value) === populationNorm
+      );
+      return normalize(record.location) === academyNorm && populationAllowed;
+    });
 
-    records.push(...batch);
+    cache = {
+      academy,
+      records: filtered,
+      expiresAt: Date.now() + CACHE_TTL_MS
+    };
 
-    if (batch.length < limit) {
-      break;
-    }
+    logger.info({ academy, records: filtered.length }, "Vacation records cached");
 
-    offset += limit;
+    return filtered;
+  })();
+
+  try {
+    return await inFlight;
+  } finally {
+    inFlight = null;
   }
-
-  const academyNorm = normalize(academy);
-  const filtered = records.filter((record) => {
-    const populationNorm = normalize(record.population ?? "");
-    const populationAllowed = POPULATION_VALUES.some(
-      (value) => normalize(value) === populationNorm
-    );
-    return normalize(record.location) === academyNorm && populationAllowed;
-  });
-
-  cache = {
-    academy,
-    records: filtered,
-    expiresAt: Date.now() + CACHE_TTL_MS
-  };
-
-  logger.info({ academy, records: filtered.length }, "Vacation records cached");
-
-  return filtered;
 }
 
 export type ClosureInfo = {
