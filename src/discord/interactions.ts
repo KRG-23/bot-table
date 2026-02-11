@@ -199,14 +199,16 @@ export async function handleInteraction(
     if (subcommand === "add") {
       const code = interaction.options.getString("code", true);
       const label = interaction.options.getString("label", true);
-      const channel = interaction.options.getChannel("channel", true);
+      const selected = interaction.options.getChannel("channel", true);
+      const channel: ChannelLike = { id: selected.id, type: selected.type };
       await handleGamesAdd(interaction, config, { code, label, channel });
       return;
     }
 
     if (subcommand === "set_channel") {
       const gameInput = interaction.options.getString("game", true);
-      const channel = interaction.options.getChannel("channel", true);
+      const selected = interaction.options.getChannel("channel", true);
+      const channel: ChannelLike = { id: selected.id, type: selected.type };
       await handleGamesSetChannel(interaction, { gameInput, channel });
       return;
     }
