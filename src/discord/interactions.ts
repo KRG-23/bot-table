@@ -10,7 +10,8 @@ import type {
   InteractionReplyOptions,
   InteractionUpdateOptions,
   ModalSubmitInteraction,
-  StringSelectMenuInteraction
+  StringSelectMenuInteraction,
+  TextBasedChannel
 } from "discord.js";
 import type { Message } from "discord.js";
 import type { Logger } from "pino";
@@ -65,6 +66,7 @@ type ChannelLike = {
 };
 
 type ModalPayload = Parameters<ButtonInteraction["showModal"]>[0];
+type ChannelWithText = { isTextBased: () => boolean } | null;
 const FRENCH_MONTHS = [
   "janvier",
   "février",
@@ -287,6 +289,13 @@ export async function handleInteraction(
   }
 }
 
+function getTextChannel(channel: ChannelWithText): TextBasedChannel | null {
+  if (channel && channel.isTextBased()) {
+    return channel as TextBasedChannel;
+  }
+  return null;
+}
+
 export async function handleButtonInteraction(
   interaction: ButtonInteraction,
   config: AppConfig,
@@ -327,8 +336,9 @@ export async function handleButtonInteraction(
       return;
     }
 
-    if (interaction.channel?.isTextBased()) {
-      const message = await interaction.channel.send({
+    const channel = getTextChannel(interaction.channel);
+    if (channel) {
+      const message = await channel.send({
         content: payload.content,
         components: payload.components as ReplyComponents
       });
@@ -886,8 +896,9 @@ async function handleConfigMenu(
     }
   }
 
-  if (interaction.channel?.isTextBased()) {
-    const message = await interaction.channel.send({
+  const channel = getTextChannel(interaction.channel);
+  if (channel) {
+    const message = await channel.send({
       content: payload.content,
       components: payload.components as ReplyComponents
     });
