@@ -12,7 +12,7 @@ import type {
   ModalSubmitInteraction,
   StringSelectMenuInteraction
 } from "discord.js";
-import type { Channel, Message } from "discord.js";
+import type { Message } from "discord.js";
 import type { Logger } from "pino";
 
 import type { AppConfig } from "../config";
@@ -57,6 +57,11 @@ type ReplyComponentRow = NonNullable<ReplyComponents>[number];
 type ReplyPayload = {
   content: string;
   components?: ReplyComponents;
+};
+
+type ChannelLike = {
+  id: string;
+  type: ChannelType;
 };
 
 type ModalPayload = Parameters<ButtonInteraction["showModal"]>[0];
@@ -824,12 +829,12 @@ async function handleConfigMenu(
 type GameAddInput = {
   code: string;
   label: string;
-  channel?: Channel;
+  channel?: ChannelLike;
 };
 
 type GameChannelInput = {
   gameInput: string;
-  channel: Channel;
+  channel: ChannelLike;
 };
 
 type GameToggleInput = {
@@ -858,7 +863,7 @@ function sanitizeGameCode(input: string): string {
     .replace(/^_+|_+$/g, "");
 }
 
-function isValidGameChannel(channel: Channel): boolean {
+function isValidGameChannel(channel: ChannelLike): boolean {
   return channel.type === ChannelType.GuildText || channel.type === ChannelType.GuildAnnouncement;
 }
 
@@ -2049,8 +2054,11 @@ function buildGamesEmptyRow(): ReplyComponentRow {
 async function buildGamesConfigPayload(state: GameConfigState): Promise<ReplyPayload> {
   const prisma = getPrisma();
   const games = await listAllGames(prisma);
+  const orderedGames = [...games].sort(
+    (a, b) => Number(b.active) - Number(a.active) || a.label.localeCompare(b.label, "fr")
+  );
 
-  if (games.length === 0) {
+  if (orderedGames.length === 0) {
     return {
       content: [
         "**Jeux & canaux**",
