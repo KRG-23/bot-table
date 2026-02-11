@@ -95,7 +95,7 @@ Enable the following **Privileged Gateway Intents** in the Discord Developer Por
 
 ## Commands
 - `/mu_health` — check bot status
-- `/mu_config` — open the public configuration menu (expires after 60s)
+- `/mu_config` — open the public configuration menu (expires 60s after the last interaction)
 - `/mu_tables set <date> <count>` — set tables for a Friday (date format `DD/MM/YYYY`)
 - `/mu_tables show <date>` — show tables for a Friday
 - `/mu_slots generate` — create missing Friday slots for the current month

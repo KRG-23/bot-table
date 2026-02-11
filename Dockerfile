@@ -8,7 +8,9 @@ RUN apt-get update -y \
 FROM base AS deps
 COPY package*.json ./
 COPY prisma ./prisma
-RUN PRISMA_SKIP_POSTINSTALL=1 npm ci
+ENV npm_config_cache=/root/.npm
+RUN --mount=type=cache,target=/root/.npm \
+  PRISMA_SKIP_POSTINSTALL=1 npm ci --prefer-offline --no-audit
 
 FROM deps AS build
 COPY tsconfig.json ./
