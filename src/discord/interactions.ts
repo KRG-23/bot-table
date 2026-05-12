@@ -540,7 +540,10 @@ export async function handleButtonInteraction(
   }
 
   if (interaction.customId === "mu_slots:cancel_delete") {
-    await replyEphemeral(interaction, { content: "❎ Suppression annulée." });
+    await replyEphemeral(interaction, {
+      content: "❎ Suppression annulée.",
+      components: [buildBackToConfigRow()]
+    });
     return;
   }
 
@@ -1245,7 +1248,8 @@ async function handleTablesSet(
     await interaction.editReply({
       content: `❌ La date ne correspond pas à un jour de créneau. Jours actifs : ${formatSlotDays(
         slotDays
-      )}.`
+      )}.`,
+      components: [buildBackToConfigRow()]
     });
     return;
   }
@@ -1279,7 +1283,7 @@ async function handleTablesSet(
       `Tables: ${tables}`,
       `Statut: ${closureText}`
     ].join("\n"),
-    components: [buildTablesRow()]
+    components: [buildTablesRow(), buildBackToConfigRow()]
   });
 
   if (isClosed) {
@@ -1310,7 +1314,8 @@ async function handleTablesShow(
     await interaction.editReply({
       content: `❌ La date ne correspond pas à un jour de créneau. Jours actifs : ${formatSlotDays(
         slotDays
-      )}.`
+      )}.`,
+      components: [buildBackToConfigRow()]
     });
     return;
   }
@@ -1326,7 +1331,7 @@ async function handleTablesShow(
         "Créneau: ❌ Non créé",
         `Statut: ${closureText}`
       ].join("\n"),
-      components: [buildTablesRow()]
+      components: [buildTablesRow(), buildBackToConfigRow()]
     });
     return;
   }
@@ -1340,7 +1345,7 @@ async function handleTablesShow(
       `Tables: ${event.tables}`,
       `Statut: ${statusText}`
     ].join("\n"),
-    components: [buildTablesRow()]
+    components: [buildTablesRow(), buildBackToConfigRow()]
   });
 }
 
@@ -1355,7 +1360,7 @@ async function handleGenerateSlots(
 
   await interaction.editReply({
     content: buildMonthlySlotGenerationSummary(result),
-    components: [buildSlotsRow()]
+    components: [buildSlotsRow(), buildBackToConfigRow()]
   });
 }
 
@@ -1373,7 +1378,8 @@ async function handleDeleteDateRequest(
 
   if (!event) {
     await replyEphemeral(interaction, {
-      content: `ℹ️ Aucun créneau trouvé pour le ${formatFrenchDate(date)}.`
+      content: `ℹ️ Aucun créneau trouvé pour le ${formatFrenchDate(date)}.`,
+      components: [buildBackToConfigRow()]
     });
     return;
   }
@@ -1418,7 +1424,8 @@ async function handleDeleteMonthRequest(
 
   if (events.length === 0) {
     await replyEphemeral(interaction, {
-      content: `ℹ️ Aucun créneau trouvé pour ${now.format("MM/YYYY")}.`
+      content: `ℹ️ Aucun créneau trouvé pour ${now.format("MM/YYYY")}.`,
+      components: [buildBackToConfigRow()]
     });
     return;
   }
@@ -1462,7 +1469,8 @@ async function handleSlotDaysUpdate(
   });
 
   await replyEphemeral(interaction, {
-    content: `✅ Jours des créneaux mis à jour : ${formatSlotDays(parsedDays)}`
+    content: `✅ Jours des créneaux mis à jour : ${formatSlotDays(parsedDays)}`,
+    components: [buildBackToConfigRow()]
   });
 }
 
@@ -1562,7 +1570,8 @@ async function handleDeleteDateConfirm(
 
   if (!event) {
     await interaction.editReply({
-      content: `ℹ️ Aucun créneau trouvé pour le ${formatFrenchDate(date)}.`
+      content: `ℹ️ Aucun créneau trouvé pour le ${formatFrenchDate(date)}.`,
+      components: [buildBackToConfigRow()]
     });
     return;
   }
@@ -1591,7 +1600,8 @@ async function handleDeleteDateConfirm(
     threads.map((thread) => thread.threadId)
   );
   await interaction.editReply({
-    content: `🗑️ Créneau du ${formatFrenchDate(date)} supprimé (parties et notifications incluses).`
+    content: `🗑️ Créneau du ${formatFrenchDate(date)} supprimé (parties et notifications incluses).`,
+    components: [buildBackToConfigRow()]
   });
 }
 
@@ -1622,7 +1632,8 @@ async function handleDeleteMonthConfirm(
 
   if (events.length === 0) {
     await interaction.editReply({
-      content: `ℹ️ Aucun créneau trouvé pour ${now.format("MM/YYYY")}.`
+      content: `ℹ️ Aucun créneau trouvé pour ${now.format("MM/YYYY")}.`,
+      components: [buildBackToConfigRow()]
     });
     return;
   }
@@ -1652,7 +1663,8 @@ async function handleDeleteMonthConfirm(
     threads.map((thread) => thread.threadId)
   );
   await interaction.editReply({
-    content: `🗑️ Créneaux du mois ${now.format("MM/YYYY")} supprimés (parties et notifications incluses).`
+    content: `🗑️ Créneaux du mois ${now.format("MM/YYYY")} supprimés (parties et notifications incluses).`,
+    components: [buildBackToConfigRow()]
   });
 }
 
@@ -1983,6 +1995,20 @@ function buildSlotsRow() {
       }
     ]
   };
+}
+
+function buildBackToConfigRow(): ReplyComponentRow {
+  return {
+    type: 1,
+    components: [
+      {
+        type: 2,
+        custom_id: "mu_config:show",
+        label: "Retour au menu",
+        style: ButtonStyle.Secondary
+      }
+    ]
+  } as ReplyComponentRow;
 }
 
 type ConfigCategory = "home" | "slots" | "matches" | "tables" | "automations";
