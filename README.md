@@ -138,7 +138,7 @@ Enable the following **Privileged Gateway Intents** in the Discord Developer Por
 - `/mu_games disable <game>` — disable a game
 - `/mu_games enable <game>` — enable a game
 
-The `/mu_config` menu starts on “Accueil” with a language selector and a table of recorded slots. A base settings reminder appears as a quote block. Admins can configure slot days (multiple weekdays), manage games + channels, automation timing, and use category buttons for slots, matches, and tables. New games created from the menu default to `DISCORD_CHANNEL_ID` until reassigned.
+The `/mu_config` menu starts on “Accueil” with a language selector and a table of recorded slots. A base settings reminder appears as a quote block. Admins can configure slot days (multiple weekdays), manage games + channels, automation timing, and use category buttons for slots, games, matches, and tables. New games created from the menu default to `DISCORD_CHANNEL_ID` until reassigned.
 
 ## Automations
 
@@ -164,7 +164,7 @@ All core actions have both a slash command and a button/modals path:
 
 - Tables + slots: `/mu_tables`, `/mu_slots` or their buttons/modals
 - Slot days: `/mu_slots set_days` or the config modal
-- Games + channels: `/mu_games ...` or the config menu actions
+- Games + channels: `/mu_games ...` or the `Jeux` config category
 - Match creation: `/mu_match create` or match panel button (modal)
 - Match validate/refuse/cancel: `/mu_match validate|refuse|cancel` or match buttons
 

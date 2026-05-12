@@ -13,8 +13,8 @@ Objectif : s'assurer qu'un admin peut tout faire via les commandes **ou** via l'
 | Créneaux        | Supprimer une date        | `/mu_slots delete_date`  | Bouton “Supprimer une date” + modal                    |
 | Créneaux        | Supprimer le mois         | `/mu_slots delete_month` | Bouton “Supprimer le mois” + confirmation              |
 | Créneaux        | Configurer les jours      | `/mu_slots set_days`     | Bouton “Configurer les jours” + modal                  |
-| Jeux & canaux   | Lister les jeux           | `/mu_games list`         | Menu “Configurer jeux & canaux”                        |
-| Jeux & canaux   | Ajouter un jeu            | `/mu_games add`          | Bouton “Ajouter un jeu” + modal                        |
+| Jeux & canaux   | Lister les jeux           | `/mu_games list`         | Catégorie “Jeux”                                       |
+| Jeux & canaux   | Ajouter un jeu            | `/mu_games add`          | Catégorie “Jeux” + bouton “Ajouter un jeu” + modal     |
 | Jeux & canaux   | Assigner un canal         | `/mu_games set_channel`  | Sélecteur de canal + bouton “Enregistrer”              |
 | Jeux & canaux   | Désactiver un jeu         | `/mu_games disable`      | Bouton “Désactiver”                                    |
 | Jeux & canaux   | Réactiver un jeu          | `/mu_games enable`       | Bouton “Réactiver”                                     |
@@ -31,5 +31,6 @@ Objectif : s'assurer qu'un admin peut tout faire via les commandes **ou** via l'
 
 - Le menu `/mu_config` est public, mais les actions admin restent protégées par rôle.
 - L’onglet “Accueil” propose le choix de langue et un tableau des créneaux enregistrés, avec un rappel des paramètres de base en citation.
+- La catégorie “Jeux” sépare le référentiel jeux/canaux de la gestion des créneaux.
 - Les jeux sont configurés dynamiquement et chaque jeu doit avoir un canal associé.
 - Les automatisations ont des valeurs par défaut, mais l’admin peut modifier le jour, l’heure et la fenêtre d’analyse depuis `/mu_config`.

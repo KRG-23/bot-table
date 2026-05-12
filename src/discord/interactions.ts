@@ -2011,11 +2011,12 @@ function buildBackToConfigRow(): ReplyComponentRow {
   } as ReplyComponentRow;
 }
 
-type ConfigCategory = "home" | "slots" | "matches" | "tables" | "automations";
+type ConfigCategory = "home" | "slots" | "games" | "matches" | "tables" | "automations";
 
 const CONFIG_CATEGORIES: { value: ConfigCategory; label: string; description: string }[] = [
   { value: "home", label: "Accueil", description: "Vue d'ensemble" },
   { value: "slots", label: "Créneaux", description: "Gérer les créneaux" },
+  { value: "games", label: "Jeux", description: "Gérer jeux & canaux" },
   { value: "matches", label: "Parties", description: "Gérer les parties" },
   { value: "tables", label: "Tables", description: "Gérer les tables" },
   { value: "automations", label: "Automatisations", description: "Planifier les actions" }
@@ -2078,12 +2079,6 @@ function buildSlotsCategoryRows() {
           custom_id: "mu_slots:configure_days",
           label: "Configurer les jours",
           style: ButtonStyle.Primary
-        },
-        {
-          type: 2,
-          custom_id: "mu_games:configure",
-          label: "Configurer jeux & canaux",
-          style: ButtonStyle.Secondary
         }
       ]
     },
@@ -2107,6 +2102,28 @@ function buildSlotsCategoryRows() {
           custom_id: "mu_slots:delete_date",
           label: "Supprimer une date",
           style: ButtonStyle.Danger
+        }
+      ]
+    }
+  ];
+}
+
+function buildGamesCategoryRows() {
+  return [
+    {
+      type: 1,
+      components: [
+        {
+          type: 2,
+          custom_id: "mu_games:configure",
+          label: "Configurer jeux & canaux",
+          style: ButtonStyle.Primary
+        },
+        {
+          type: 2,
+          custom_id: "mu_games:add",
+          label: "Ajouter un jeu",
+          style: ButtonStyle.Secondary
         }
       ]
     }
@@ -2513,19 +2530,39 @@ async function buildConfigCategoryResponse(
   if (category === "slots") {
     const prisma = getPrisma();
     const slotDays = await getSlotDays(prisma);
-    const games = await listActiveGames(prisma);
     const slotsOverview = await buildMonthSlotsOverview(config, logger, slotDays);
 
     return {
       content: [
         buildConfigCategoryContent("**Créneaux**"),
         `Jours actifs : ${formatSlotDays(slotDays)}`,
-        `Jeux actifs : ${formatGamesInline(games)}`,
         "",
         `Créneaux du mois (${formatFrenchMonthYear(dayjs().tz(config.timezone))})`,
         slotsOverview
       ].join("\n"),
       components: [buildConfigMenuSelect("slots"), ...buildSlotsCategoryRows()]
+    };
+  }
+
+  if (category === "games") {
+    const games = await listAllGames(getPrisma());
+    const orderedGames = [...games].sort(
+      (a, b) => Number(b.active) - Number(a.active) || a.label.localeCompare(b.label, "fr")
+    );
+    const gameLines =
+      orderedGames.length > 0
+        ? orderedGames.map(formatGameLine).join("\n")
+        : "Aucun jeu configuré.";
+
+    return {
+      content: [
+        buildConfigCategoryContent("**Jeux & canaux**"),
+        "Associez chaque jeu au canal où créer ses fils de discussion.",
+        "",
+        `Jeux configurés (${orderedGames.length}) :`,
+        gameLines
+      ].join("\n"),
+      components: [buildConfigMenuSelect("games"), ...buildGamesCategoryRows()]
     };
   }
 
