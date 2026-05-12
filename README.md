@@ -9,6 +9,7 @@ Munitorum is a Discord bot for tabletop reservations (Warhammer 40k / AoS / Kill
 - Slash commands: `/mu_health`, `/mu_config`, `/mu_tables set|show`, `/mu_slots generate|set_days|delete_date|delete_month`, `/mu_match ...`, `/mu_games ...`
 - Table capacity management per game
 - Auto thread creation per game when a slot is opened with tables (and cleanup on cancellation)
+- Thread-level admin controls for per-game tables and possible match validation
 - Dynamic game list with per-game thread channel mapping
 - Match submissions + validation/refusal/cancellation (buttons + `/mu_match`)
 - Config menu with category selector (créneaux / parties / tables)
@@ -139,6 +140,12 @@ Enable the following **Privileged Gateway Intents** in the Discord Developer Por
 - `/mu_games enable <game>` — enable a game
 
 The `/mu_config` menu starts on “Accueil” with a language selector and a table of recorded slots. A base settings reminder appears as a quote block. Admins can configure slot days (multiple weekdays), manage games + channels, automation timing, and use category buttons for slots, games, matches, and tables. The Tables category accepts per-game allocation such as `W40K=5, AoS=2`. New games created from the menu default to `DISCORD_CHANNEL_ID` until reassigned.
+
+Each generated game thread also includes admin-only buttons:
+
+- `État` — show tables, pending/validated matches, and remaining capacity for this game
+- `Tables` — update the table count for this game only
+- `Valider possibles` — validate pending matches for this game up to the available capacity
 
 ## Automations
 

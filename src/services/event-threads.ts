@@ -1,5 +1,6 @@
 import type { Event, Game } from "@prisma/client";
 import dayjs from "dayjs";
+import { ButtonStyle } from "discord.js";
 import type { Client, InteractionReplyOptions, Message } from "discord.js";
 import type { Logger } from "pino";
 
@@ -40,7 +41,7 @@ type ThreadStarterMessage = {
 
 type ThreadStarterResult = {
   id: string;
-  send: (payload: { content: string }) => Promise<unknown>;
+  send: (payload: { content: string; components?: ReplyComponents }) => Promise<unknown>;
 };
 
 export type EventThreadResult = {
@@ -74,8 +75,37 @@ function buildThreadGuideMessage(game: Game, date: dayjs.Dayjs, botName: string)
     "• Une seule partie par joueur pour la soirée.",
     "• Les réservations ouvrent quand les tables sont configurées.",
     "• Les réservations sont bloquées si le créneau est fermé.",
-    "• Les admins gèrent les tables, les jeux et les annulations depuis `/mu_config`."
+    "• Les admins peuvent gérer ce fil avec les boutons ci-dessous ou depuis `/mu_config`."
   ].join("\n");
+}
+
+function buildThreadAdminRow(
+  eventId: number,
+  gameId: number
+): NonNullable<ReplyComponents>[number] {
+  return {
+    type: 1,
+    components: [
+      {
+        type: 2,
+        custom_id: `mu_thread:status:${eventId}:${gameId}`,
+        label: "État",
+        style: ButtonStyle.Secondary
+      },
+      {
+        type: 2,
+        custom_id: `mu_thread:tables:${eventId}:${gameId}`,
+        label: "Tables",
+        style: ButtonStyle.Primary
+      },
+      {
+        type: 2,
+        custom_id: `mu_thread:validate:${eventId}:${gameId}`,
+        label: "Valider possibles",
+        style: ButtonStyle.Success
+      }
+    ]
+  };
 }
 
 function isSendableChannel(channel: unknown): channel is SendableChannel {
@@ -162,7 +192,8 @@ export async function ensureEventThreads(
 
       try {
         await thread.send({
-          content: buildThreadGuideMessage(game, eventDate, client.user?.username ?? "Munitorum")
+          content: buildThreadGuideMessage(game, eventDate, client.user?.username ?? "Munitorum"),
+          components: [buildThreadAdminRow(event.id, game.id)]
         });
       } catch (err) {
         logger.warn({ err, gameId: game.id, eventId: event.id }, "Failed to send thread guide");

@@ -41,6 +41,7 @@
 
 - **Collecte des tables** : commande admin pour saisir/modifier le nombre de tables par jeu d’un vendredi. La table Billard n’a pas de traitement spécial autre que d’être comptée dans le jeu choisi.
 - **Création automatique des fils** : un fil par jeu pour chaque vendredi du mois, créé uniquement si ce jeu a au moins une table ; réutiliser le fil s’il existe déjà.
+- **Gestion depuis le fil** : un admin peut consulter l’état du jeu, modifier ses tables et valider les parties possibles directement depuis le fil.
 - **Saisie d’une partie** : message mentionnant le bot + les deux joueurs + le jeu. Le bot répond avec un récap et le statut (`en_attente` ou `valide`).
 - **Validation automatique** : si le total des parties enregistrées pour un jeu ≤ tables de ce jeu, bascule en `valide` sans action admin.
 - **Validation manuelle** : commandes admin pour valider/refuser/annuler une partie.

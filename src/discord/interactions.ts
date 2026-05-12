@@ -430,6 +430,21 @@ export async function handleButtonInteraction(
     return;
   }
 
+  if (interaction.customId.startsWith("mu_thread:status:")) {
+    await handleThreadStatus(interaction, config);
+    return;
+  }
+
+  if (interaction.customId.startsWith("mu_thread:tables:")) {
+    await showThreadTablesModal(interaction, config);
+    return;
+  }
+
+  if (interaction.customId.startsWith("mu_thread:validate:")) {
+    await handleThreadValidatePossible(interaction, config, logger);
+    return;
+  }
+
   if (interaction.customId === "mu_slots:delete_month") {
     await handleDeleteMonthRequest(interaction, config);
     return;
@@ -611,6 +626,7 @@ export async function handleButtonInteraction(
     }
 
     await handleTablesShow(interaction, config, logger, parsedDate.startOf("day"));
+    return;
   }
 }
 
@@ -734,6 +750,12 @@ export async function handleModalSubmit(
     }
 
     await handleTablesShow(interaction, config, logger, parsedDate);
+    return;
+  }
+
+  if (interaction.customId.startsWith("mu_thread:tables_modal:")) {
+    await handleThreadTablesModal(interaction, config, logger);
+    return;
   }
 
   if (interaction.customId === "mu_slots:delete_date_modal") {
@@ -1520,6 +1542,300 @@ async function handleTablesShow(
       `Statut: ${statusText}`
     ].join("\n"),
     components: [buildTablesRow(), buildBackToConfigRow()]
+  });
+}
+
+type ThreadAdminContext = {
+  eventId: number;
+  gameId: number;
+};
+
+function parseThreadAdminContext(customId: string, prefix: string): ThreadAdminContext | null {
+  const [eventIdRaw, gameIdRaw] = customId.replace(prefix, "").split(":");
+  const eventId = Number(eventIdRaw);
+  const gameId = Number(gameIdRaw);
+
+  if (!Number.isInteger(eventId) || !Number.isInteger(gameId)) {
+    return null;
+  }
+
+  return { eventId, gameId };
+}
+
+async function buildThreadStatusContent(
+  config: AppConfig,
+  context: ThreadAdminContext
+): Promise<string | null> {
+  const prisma = getPrisma();
+  const [event, game] = await Promise.all([
+    prisma.event.findUnique({ where: { id: context.eventId } }),
+    prisma.game.findUnique({ where: { id: context.gameId } })
+  ]);
+
+  if (!event || !game) {
+    return null;
+  }
+
+  const [capacity, validatedCount, pendingCount, refusedCount, cancelledCount] = await Promise.all([
+    getGameTableCapacity(prisma, event, game.id),
+    prisma.match.count({
+      where: { eventId: event.id, gameId: game.id, status: MatchStatus.VALIDE }
+    }),
+    prisma.match.count({
+      where: { eventId: event.id, gameId: game.id, status: MatchStatus.EN_ATTENTE }
+    }),
+    prisma.match.count({
+      where: { eventId: event.id, gameId: game.id, status: MatchStatus.REFUSE }
+    }),
+    prisma.match.count({
+      where: { eventId: event.id, gameId: game.id, status: MatchStatus.ANNULE }
+    })
+  ]);
+  const remainingAfterValidated = Math.max(capacity - validatedCount, 0);
+  const validatableNow = Math.min(pendingCount, remainingAfterValidated);
+
+  return [
+    `📅 ${formatFrenchDate(dayjs(event.date).tz(config.timezone))}`,
+    `Jeu : ${game.label}`,
+    `Statut : ${event.status === "OUVERT" ? "✅ Ouvert" : "⛔ Fermé"}`,
+    `Tables ${game.label} : ${formatTableCount(capacity)}`,
+    `Tables restantes après validations : ${formatTableCount(remainingAfterValidated)}`,
+    "",
+    `Parties validées : ${validatedCount}`,
+    `Parties en attente : ${pendingCount}`,
+    `Validables maintenant : ${validatableNow}`,
+    `Parties refusées : ${refusedCount}`,
+    `Parties annulées : ${cancelledCount}`
+  ].join("\n");
+}
+
+async function handleThreadStatus(
+  interaction: ButtonInteraction,
+  config: AppConfig
+): Promise<void> {
+  if (!(await ensureAdmin(interaction, config))) {
+    return;
+  }
+
+  const context = parseThreadAdminContext(interaction.customId, "mu_thread:status:");
+  if (!context) {
+    await replyEphemeral(interaction, { content: "❌ Contexte du fil invalide." });
+    return;
+  }
+
+  const content = await buildThreadStatusContent(config, context);
+  await replyEphemeral(interaction, {
+    content: content ?? "❌ Soirée ou jeu introuvable."
+  });
+}
+
+async function showThreadTablesModal(
+  interaction: ButtonInteraction,
+  config: AppConfig
+): Promise<void> {
+  if (!(await ensureAdmin(interaction, config))) {
+    return;
+  }
+
+  const context = parseThreadAdminContext(interaction.customId, "mu_thread:tables:");
+  if (!context) {
+    await replyEphemeral(interaction, { content: "❌ Contexte du fil invalide." });
+    return;
+  }
+
+  const prisma = getPrisma();
+  const [event, game] = await Promise.all([
+    prisma.event.findUnique({ where: { id: context.eventId } }),
+    prisma.game.findUnique({ where: { id: context.gameId } })
+  ]);
+
+  if (!event || !game) {
+    await replyEphemeral(interaction, { content: "❌ Soirée ou jeu introuvable." });
+    return;
+  }
+
+  const capacity = await getGameTableCapacity(prisma, event, game.id);
+  const modal = {
+    custom_id: `mu_thread:tables_modal:${event.id}:${game.id}`,
+    title: `Tables ${game.label}`.slice(0, 45),
+    components: [
+      {
+        type: 1,
+        components: [
+          {
+            type: 4,
+            custom_id: "count",
+            label: `Tables pour ${game.label}`.slice(0, 45),
+            style: TextInputStyle.Short,
+            required: true,
+            value: String(capacity),
+            placeholder: "5"
+          }
+        ]
+      }
+    ]
+  };
+
+  await interaction.showModal(modal as ModalPayload);
+}
+
+async function handleThreadTablesModal(
+  interaction: ModalSubmitInteraction,
+  config: AppConfig,
+  logger: Logger
+): Promise<void> {
+  if (!(await ensureAdmin(interaction, config))) {
+    return;
+  }
+
+  const context = parseThreadAdminContext(interaction.customId, "mu_thread:tables_modal:");
+  if (!context) {
+    await replyEphemeral(interaction, { content: "❌ Contexte du fil invalide." });
+    return;
+  }
+
+  const count = Number(interaction.fields.getTextInputValue("count"));
+  if (!Number.isInteger(count) || count < 0) {
+    await replyEphemeral(interaction, { content: "❌ Nombre de tables invalide." });
+    return;
+  }
+
+  await replyEphemeral(interaction, { content: "⏳ Mise à jour des tables du fil..." });
+
+  const prisma = getPrisma();
+  const [event, game] = await Promise.all([
+    prisma.event.findUnique({ where: { id: context.eventId } }),
+    prisma.game.findUnique({ where: { id: context.gameId } })
+  ]);
+
+  if (!event || !game) {
+    await interaction.editReply({ content: "❌ Soirée ou jeu introuvable." });
+    return;
+  }
+
+  const eventDate = dayjs(event.date).tz(config.timezone);
+  const closure = await getClosureInfo(eventDate, config.vacationAcademy, config.timezone, logger);
+
+  await upsertGameTableCapacity(prisma, event.id, game.id, count);
+  const totalTables = await recalculateEventTables(prisma, event.id);
+  const isClosed = closure.closed || totalTables <= 0;
+  const updatedEvent = await prisma.event.update({
+    where: { id: event.id },
+    data: {
+      tables: isClosed ? 0 : totalTables,
+      status: isClosed ? "FERME" : "OUVERT",
+      isVacation: closure.closed
+    }
+  });
+
+  if (closure.closed || totalTables <= 0) {
+    await closeEventThreads(interaction.client, logger, updatedEvent.id);
+  } else {
+    if (count <= 0) {
+      await closeEventThreadsForGames(interaction.client, logger, updatedEvent.id, [game.id]);
+    }
+    await ensureEventThreads(interaction.client, config, logger, updatedEvent);
+  }
+
+  const content = await buildThreadStatusContent(config, context);
+  await interaction.editReply({
+    content: [`✅ Tables ${game.label} mises à jour : ${formatTableCount(count)}.`, "", content]
+      .filter(Boolean)
+      .join("\n")
+  });
+}
+
+async function handleThreadValidatePossible(
+  interaction: ButtonInteraction,
+  config: AppConfig,
+  logger: Logger
+): Promise<void> {
+  if (!(await ensureAdmin(interaction, config))) {
+    return;
+  }
+
+  const context = parseThreadAdminContext(interaction.customId, "mu_thread:validate:");
+  if (!context) {
+    await replyEphemeral(interaction, { content: "❌ Contexte du fil invalide." });
+    return;
+  }
+
+  await replyEphemeral(interaction, { content: "⏳ Validation des parties possibles..." });
+
+  const prisma = getPrisma();
+  const [event, game] = await Promise.all([
+    prisma.event.findUnique({ where: { id: context.eventId } }),
+    prisma.game.findUnique({ where: { id: context.gameId } })
+  ]);
+
+  if (!event || !game) {
+    await interaction.editReply({ content: "❌ Soirée ou jeu introuvable." });
+    return;
+  }
+
+  if (event.status === "FERME") {
+    await interaction.editReply({ content: "⛔ Soirée fermée : validation impossible." });
+    return;
+  }
+
+  const capacity = await getGameTableCapacity(prisma, event, game.id);
+  const validatedCount = await prisma.match.count({
+    where: { eventId: event.id, gameId: game.id, status: MatchStatus.VALIDE }
+  });
+  const remaining = Math.max(capacity - validatedCount, 0);
+
+  if (remaining <= 0) {
+    await interaction.editReply({
+      content: `⛔ Aucune table disponible pour ${game.label}.`
+    });
+    return;
+  }
+
+  const pending = await prisma.match.findMany({
+    where: { eventId: event.id, gameId: game.id, status: MatchStatus.EN_ATTENTE },
+    include: { player1: true, player2: true, event: true, game: true },
+    orderBy: { createdAt: "asc" }
+  });
+  const selected = pending.slice(0, remaining);
+
+  if (selected.length === 0) {
+    await interaction.editReply({
+      content: `ℹ️ Aucune partie en attente pour ${game.label}.`
+    });
+    return;
+  }
+
+  await prisma.match.updateMany({
+    where: { id: { in: selected.map((match) => match.id) } },
+    data: { status: MatchStatus.VALIDE }
+  });
+
+  await Promise.all(
+    selected.map(async (match) => {
+      const summary = buildMatchSummary(match, config);
+      await notifyMatchStatus(
+        interaction,
+        config,
+        logger,
+        match,
+        `✅ Partie validée depuis le fil : ${summary}`,
+        `✅ Votre partie est validée : ${summary}`
+      );
+    })
+  );
+
+  const content = await buildThreadStatusContent(config, context);
+  await interaction.editReply({
+    content: [
+      `✅ ${selected.length} partie(s) validée(s) pour ${game.label}.`,
+      pending.length > selected.length
+        ? `ℹ️ ${pending.length - selected.length} partie(s) restent en attente faute de table.`
+        : null,
+      "",
+      content
+    ]
+      .filter(Boolean)
+      .join("\n")
   });
 }
 

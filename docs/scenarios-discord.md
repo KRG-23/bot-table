@@ -20,6 +20,9 @@ Objectif : s'assurer qu'un admin peut tout faire via les commandes **ou** via l'
 | Jeux & canaux   | Réactiver un jeu           | `/mu_games enable`       | Bouton “Réactiver”                                     |
 | Tables          | Définir les tables par jeu | `/mu_tables set [game]`  | Bouton “Définir” + modal `W40K=5, AoS=2`               |
 | Tables          | Voir les tables par jeu    | `/mu_tables show`        | Bouton “Voir” + modal                                  |
+| Thread admin    | Voir l’état du fil         | _N/A (fil uniquement)_   | Bouton “État” dans le fil                              |
+| Thread admin    | Définir tables du jeu      | `/mu_tables set [game]`  | Bouton “Tables” dans le fil + modal                    |
+| Thread admin    | Valider ce qui rentre      | _N/A (fil uniquement)_   | Bouton “Valider possibles” dans le fil                 |
 | Parties         | Créer une partie           | `/mu_match create`       | Bouton “Créer une partie” + modal                      |
 | Parties         | Valider une partie         | `/mu_match validate`     | Bouton “Valider” + modal                               |
 | Parties         | Refuser une partie         | `/mu_match refuse`       | Bouton “Refuser” + modal                               |
@@ -34,4 +37,5 @@ Objectif : s'assurer qu'un admin peut tout faire via les commandes **ou** via l'
 - La catégorie “Jeux” sépare le référentiel jeux/canaux de la gestion des créneaux.
 - Les jeux sont configurés dynamiquement et chaque jeu doit avoir un canal associé.
 - La catégorie “Tables” permet de répartir les tables par jeu ; les fils ne sont créés que pour les jeux ayant au moins une table.
+- Chaque fil de soirée expose un mini-panneau admin limité au jeu + créneau du fil.
 - Les automatisations ont des valeurs par défaut, mais l’admin peut modifier le jour, l’heure et la fenêtre d’analyse depuis `/mu_config`.
