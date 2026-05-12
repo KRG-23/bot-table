@@ -357,6 +357,12 @@ export async function handleButtonInteraction(
     return;
   }
 
+  if (interaction.customId === "mu_config:home") {
+    const payload = await buildConfigCategoryResponse("home", config, logger);
+    await interaction.update(toUpdatePayload(payload));
+    return;
+  }
+
   if (interaction.customId.startsWith("mu_lang:set:")) {
     if (!(await ensureAdmin(interaction, config))) {
       return;
@@ -2517,6 +2523,20 @@ function buildBackToConfigRow(): ReplyComponentRow {
   } as ReplyComponentRow;
 }
 
+function buildBackToHomeRow(): ReplyComponentRow {
+  return {
+    type: 1,
+    components: [
+      {
+        type: 2,
+        custom_id: "mu_config:home",
+        label: "Retour à l'accueil",
+        style: ButtonStyle.Secondary
+      }
+    ]
+  } as ReplyComponentRow;
+}
+
 type ConfigCategory = "home" | "slots" | "games" | "matches" | "tables" | "automations";
 
 const CONFIG_CATEGORIES: { value: ConfigCategory; label: string; description: string }[] = [
@@ -2632,7 +2652,8 @@ function buildGamesCategoryRows() {
           style: ButtonStyle.Secondary
         }
       ]
-    }
+    },
+    buildBackToHomeRow()
   ];
 }
 
@@ -2880,7 +2901,7 @@ async function buildGamesConfigPayload(state: GameConfigState): Promise<ReplyPay
       ]
         .filter(Boolean)
         .join("\n"),
-      components: [buildGamesEmptyRow()]
+      components: [buildGamesEmptyRow(), buildBackToHomeRow()]
     };
   }
 
@@ -2908,7 +2929,8 @@ async function buildGamesConfigPayload(state: GameConfigState): Promise<ReplyPay
     components: [
       buildGamesSelectRow(orderedGames, selectedGame.id),
       buildGamesChannelRow(selectedGame.id, selectedChannelId),
-      buildGamesActionRow(selectedGame, selectedChannelId)
+      buildGamesActionRow(selectedGame, selectedChannelId),
+      buildBackToHomeRow()
     ]
   };
 }
