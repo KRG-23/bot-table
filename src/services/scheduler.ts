@@ -5,12 +5,20 @@ import type { Logger } from "pino";
 import type { AppConfig } from "../config";
 import { getPrisma } from "../db";
 
+import {
+  type AutomationSettings,
+  buildMonthlyAutomationRunDate,
+  buildWeeklyReviewRunDate,
+  getAutomationSettings
+} from "./automation-settings";
 import { buildWeeklyMatchReviewSummary, reviewUpcomingMatches } from "./match-review";
 import { buildMonthlySlotGenerationSummary, generateCurrentMonthSlots } from "./monthly-slots";
 
 const MONTHLY_SLOTS_LAST_RUN_SETTING = "monthly_slots_last_auto_run";
 const WEEKLY_MATCH_REVIEW_LAST_RUN_SETTING = "weekly_match_review_last_auto_run";
 const MAX_TIMEOUT_MS = 24 * 60 * 60 * 1000;
+let schedulerGeneration = 0;
+const scheduledTimeouts = new Set<NodeJS.Timeout>();
 
 type ReplyComponents = InteractionReplyOptions["components"];
 
@@ -26,36 +34,77 @@ function isSendableChannel(channel: unknown): channel is SendableChannel {
   return "send" in channel && typeof (channel as SendableChannel).send === "function";
 }
 
-function isFirstSunday(date: dayjs.Dayjs): boolean {
-  return date.date() <= 7 && date.day() === 0;
-}
-
-function isAtOrAfterHour(date: dayjs.Dayjs, hour: number): boolean {
-  return date.hour() >= hour;
+function isAtOrAfterTime(date: dayjs.Dayjs, time: string): boolean {
+  const [hour, minute] = time.split(":").map(Number);
+  return date.hour() > hour || (date.hour() === hour && date.minute() >= minute);
 }
 
 export function startSchedulers(client: Client, config: AppConfig, logger: Logger): void {
+  schedulerGeneration += 1;
+  clearScheduledTimeouts();
+  const generation = schedulerGeneration;
+
   void runStartupCatchUp(client, config, logger).catch((err) => {
     logger.error({ err }, "Scheduler startup catch-up failed");
   });
 
-  scheduleJob(config, logger, "monthly_slots", getNextMonthlySlotsRun, async () => {
-    await maybeGenerateMonthlySlots(client, config, logger);
-  });
+  planSchedulerJobs(client, config, logger, generation);
+}
 
-  scheduleJob(config, logger, "weekly_match_review", getNextWeeklyMatchReviewRun, async () => {
-    await maybeReviewUpcomingMatches(client, config, logger);
-  });
+export function refreshSchedulers(client: Client, config: AppConfig, logger: Logger): void {
+  schedulerGeneration += 1;
+  clearScheduledTimeouts();
+  planSchedulerJobs(client, config, logger, schedulerGeneration);
+}
+
+function planSchedulerJobs(
+  client: Client,
+  config: AppConfig,
+  logger: Logger,
+  generation: number
+): void {
+  scheduleJob(
+    config,
+    logger,
+    "monthly_slots",
+    () => getNextMonthlySlotsRun(config),
+    async () => {
+      await maybeGenerateMonthlySlots(client, config, logger);
+    },
+    generation
+  );
+
+  scheduleJob(
+    config,
+    logger,
+    "weekly_match_review",
+    () => getNextWeeklyMatchReviewRun(config),
+    async () => {
+      await maybeReviewUpcomingMatches(client, config, logger);
+    },
+    generation
+  );
+}
+
+function clearScheduledTimeouts(): void {
+  for (const timeout of scheduledTimeouts) {
+    clearTimeout(timeout);
+  }
+  scheduledTimeouts.clear();
 }
 
 async function runStartupCatchUp(client: Client, config: AppConfig, logger: Logger): Promise<void> {
   const now = dayjs().tz(config.timezone);
+  const settings = await getAutomationSettings(getPrisma());
 
-  if (isFirstSunday(now) && isAtOrAfterHour(now, 9)) {
+  if (isMonthlyAutomationDay(now, settings) && isAtOrAfterTime(now, settings.monthlyTime)) {
     await maybeGenerateMonthlySlots(client, config, logger);
   }
 
-  if (now.day() === 3 && isAtOrAfterHour(now, 21)) {
+  if (
+    now.day() === settings.weeklyReviewWeekday &&
+    isAtOrAfterTime(now, settings.weeklyReviewTime)
+  ) {
     await maybeReviewUpcomingMatches(client, config, logger);
   }
 }
@@ -64,22 +113,34 @@ function scheduleJob(
   config: AppConfig,
   logger: Logger,
   name: string,
-  getNextRun: (now: dayjs.Dayjs) => dayjs.Dayjs,
-  task: () => Promise<void>
+  getNextRun: () => Promise<dayjs.Dayjs>,
+  task: () => Promise<void>,
+  generation: number
 ): void {
   let running = false;
 
-  const scheduleNext = (): void => {
+  const scheduleNext = async (): Promise<void> => {
+    if (generation !== schedulerGeneration) {
+      return;
+    }
+
     const now = dayjs().tz(config.timezone);
-    const nextRun = getNextRun(now);
+    const nextRun = await getNextRun();
     const delayMs = Math.max(0, nextRun.valueOf() - now.valueOf());
     const currentDelayMs = Math.min(delayMs, MAX_TIMEOUT_MS);
 
     logger.info({ job: name, nextRun: nextRun.toISOString() }, "Scheduler job planned");
 
-    setTimeout(() => {
+    const timeout = setTimeout(() => {
+      scheduledTimeouts.delete(timeout);
+      if (generation !== schedulerGeneration) {
+        return;
+      }
+
       if (delayMs > MAX_TIMEOUT_MS) {
-        scheduleNext();
+        void scheduleNext().catch((err) => {
+          logger.error({ err, job: name }, "Failed to schedule job");
+        });
         return;
       }
 
@@ -95,42 +156,32 @@ function scheduleJob(
           logger.error({ err, job: name }, "Scheduled job failed");
         } finally {
           running = false;
-          scheduleNext();
+          if (generation === schedulerGeneration) {
+            void scheduleNext().catch((err) => {
+              logger.error({ err, job: name }, "Failed to schedule job");
+            });
+          }
         }
       };
 
       void run();
     }, currentDelayMs);
+    scheduledTimeouts.add(timeout);
   };
 
-  scheduleNext();
+  void scheduleNext().catch((err) => {
+    logger.error({ err, job: name }, "Failed to schedule job");
+  });
 }
 
-function getNextMonthlySlotsRun(now: dayjs.Dayjs): dayjs.Dayjs {
-  let cursor = now.startOf("month");
-
-  while (true) {
-    let candidate = cursor.hour(9).minute(0).second(0).millisecond(0);
-    while (candidate.day() !== 0) {
-      candidate = candidate.add(1, "day");
-    }
-
-    if (candidate.isAfter(now)) {
-      return candidate;
-    }
-
-    cursor = cursor.add(1, "month").startOf("month");
-  }
+async function getNextMonthlySlotsRun(config: AppConfig): Promise<dayjs.Dayjs> {
+  const settings = await getAutomationSettings(getPrisma());
+  return buildMonthlyAutomationRunDate(dayjs().tz(config.timezone), settings);
 }
 
-function getNextWeeklyMatchReviewRun(now: dayjs.Dayjs): dayjs.Dayjs {
-  let candidate = now.day(3).hour(21).minute(0).second(0).millisecond(0);
-
-  if (!candidate.isAfter(now)) {
-    candidate = candidate.add(7, "day");
-  }
-
-  return candidate;
+async function getNextWeeklyMatchReviewRun(config: AppConfig): Promise<dayjs.Dayjs> {
+  const settings = await getAutomationSettings(getPrisma());
+  return buildWeeklyReviewRunDate(dayjs().tz(config.timezone), settings);
 }
 
 async function maybeGenerateMonthlySlots(
@@ -139,12 +190,14 @@ async function maybeGenerateMonthlySlots(
   logger: Logger
 ): Promise<void> {
   const now = dayjs().tz(config.timezone);
-  if (!isFirstSunday(now)) {
+  const prisma = getPrisma();
+  const settings = await getAutomationSettings(prisma);
+
+  if (!isMonthlyAutomationDay(now, settings)) {
     return;
   }
 
   const monthKey = now.format("YYYY-MM");
-  const prisma = getPrisma();
   const lastRun = await prisma.setting.findUnique({
     where: { key: MONTHLY_SLOTS_LAST_RUN_SETTING }
   });
@@ -179,6 +232,7 @@ async function maybeReviewUpcomingMatches(
   const now = dayjs().tz(config.timezone);
   const runKey = now.format("YYYY-MM-DD");
   const prisma = getPrisma();
+  const settings = await getAutomationSettings(prisma);
   const lastRun = await prisma.setting.findUnique({
     where: { key: WEEKLY_MATCH_REVIEW_LAST_RUN_SETTING }
   });
@@ -188,7 +242,12 @@ async function maybeReviewUpcomingMatches(
   }
 
   logger.info({ runKey }, "Starting weekly match review");
-  const result = await reviewUpcomingMatches(client, config, logger);
+  const result = await reviewUpcomingMatches(
+    client,
+    config,
+    logger,
+    settings.weeklyReviewLookaheadDays
+  );
 
   await prisma.setting.upsert({
     where: { key: WEEKLY_MATCH_REVIEW_LAST_RUN_SETTING },
@@ -201,8 +260,19 @@ async function maybeReviewUpcomingMatches(
     }
   });
 
-  await sendScheduledSummary(client, config, logger, buildWeeklyMatchReviewSummary(result));
+  await sendScheduledSummary(
+    client,
+    config,
+    logger,
+    buildWeeklyMatchReviewSummary(result, settings.weeklyReviewLookaheadDays)
+  );
   logger.info({ runKey, result }, "Weekly match review completed");
+}
+
+function isMonthlyAutomationDay(now: dayjs.Dayjs, settings: AutomationSettings): boolean {
+  return (
+    now.day() === settings.monthlyWeekday && Math.ceil(now.date() / 7) === settings.monthlyWeek
+  );
 }
 
 async function sendScheduledSummary(

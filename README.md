@@ -138,19 +138,25 @@ Enable the following **Privileged Gateway Intents** in the Discord Developer Por
 - `/mu_games disable <game>` — disable a game
 - `/mu_games enable <game>` — enable a game
 
-The `/mu_config` menu starts on “Accueil” with a language selector and a table of recorded slots. A base settings reminder appears as a quote block. Admins can configure slot days (multiple weekdays), manage games + channels, and use category buttons for slots, matches, and tables. New games created from the menu default to `DISCORD_CHANNEL_ID` until reassigned.
+The `/mu_config` menu starts on “Accueil” with a language selector and a table of recorded slots. A base settings reminder appears as a quote block. Admins can configure slot days (multiple weekdays), manage games + channels, automation timing, and use category buttons for slots, matches, and tables. New games created from the menu default to `DISCORD_CHANNEL_ID` until reassigned.
 
 ## Automations
 
-When the bot is ready, it schedules the next automation runs in `TZ` (default `Europe/Paris`) without polling continuously.
+When the bot is ready, it schedules the next automation runs in `TZ` (default `Europe/Paris`) without polling continuously. The schedule is configurable from `/mu_config` > “Automatisations”; saved changes refresh the in-memory scheduler.
 
-Monthly slot generation runs on the first Sunday of the month at 09:00. It generates the current month's configured slots once, skips school holiday/holiday-eve closures, creates the per-game threads, and posts a summary in `DISCORD_CHANNEL_ID`.
+Monthly slot generation runs by default on the first Sunday of the month at 09:00. It generates the current month's configured slots once, skips school holiday/holiday-eve closures, creates the per-game threads, and posts a summary in `DISCORD_CHANNEL_ID`.
 
 - existing slots are reused
 - missing per-game threads are recreated
 - the last automatic run month is stored in the `monthly_slots_last_auto_run` setting
 
-Weekly match review runs every Wednesday at 21:00. It reviews open slots for the next 7 days, auto-validates pending matches when validated + pending matches fit within available tables, sends player DMs, and posts a recap in `DISCORD_CHANNEL_ID`.
+Weekly match review runs by default every Wednesday at 21:00. It reviews open slots for the configured window (7 days by default), auto-validates pending matches when validated + pending matches fit within available tables, sends player DMs, and posts a recap in `DISCORD_CHANNEL_ID`.
+
+Default automation values:
+
+- monthly slot generation: first Sunday, 09:00
+- weekly match review: Wednesday, 21:00
+- review window: 7 days
 
 ## Scenarios (slash + buttons parity)
 

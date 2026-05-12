@@ -54,6 +54,7 @@
 - [x] Nom des fils : “Soirée <Jeu> le <date>”
 - [x] Skip vacances/veille vacances + message d’info
 - [x] Job “mercredi 21h” : récap + auto-validation si capacité OK
+- [x] Paramétrage admin du jour, de l’heure et de la fenêtre d’analyse
 - [ ] Job “vendredi 17h” : notifications finales
 - [ ] Job “samedi 23h” : backup + rétention 1 mois
 - [ ] Script backup Postgres + purge old dumps

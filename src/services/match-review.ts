@@ -45,7 +45,10 @@ function buildMatchSummary(match: PendingMatch, config: AppConfig): string {
   }> (${match.game.label})`;
 }
 
-export function buildWeeklyMatchReviewSummary(result: WeeklyMatchReviewResult): string {
+export function buildWeeklyMatchReviewSummary(
+  result: WeeklyMatchReviewResult,
+  lookaheadDays = 7
+): string {
   const header = [
     "📋 Récapitulatif des parties",
     `Créneaux analysés : ${result.reviewedEvents}`,
@@ -54,7 +57,11 @@ export function buildWeeklyMatchReviewSummary(result: WeeklyMatchReviewResult): 
   ];
 
   if (result.lines.length === 0) {
-    return [...header, "", "Aucun créneau ouvert à analyser sur les 7 prochains jours."].join("\n");
+    return [
+      ...header,
+      "",
+      `Aucun créneau ouvert à analyser sur les ${lookaheadDays} prochain(s) jour(s).`
+    ].join("\n");
   }
 
   return [...header, "", ...result.lines].join("\n");
@@ -63,12 +70,13 @@ export function buildWeeklyMatchReviewSummary(result: WeeklyMatchReviewResult): 
 export async function reviewUpcomingMatches(
   client: Client,
   config: AppConfig,
-  logger: Logger
+  logger: Logger,
+  lookaheadDays: number
 ): Promise<WeeklyMatchReviewResult> {
   const prisma = getPrisma();
   const now = dayjs().tz(config.timezone);
   const windowStart = now.startOf("day");
-  const windowEnd = now.add(7, "day").endOf("day");
+  const windowEnd = now.add(lookaheadDays, "day").endOf("day");
 
   const events = await prisma.event.findMany({
     where: {

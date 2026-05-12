@@ -18,6 +18,18 @@ import type { Logger } from "pino";
 import type { AppConfig } from "../config";
 import { getPrisma } from "../db";
 import {
+  type AutomationSettings,
+  DEFAULT_AUTOMATION_SETTINGS,
+  formatAutomationSettings,
+  formatWeekday,
+  getAutomationSettings,
+  parseLookaheadInput,
+  parseTimeInput,
+  parseWeekInput,
+  parseWeekdayInput,
+  saveAutomationSettings
+} from "../services/automation-settings";
+import {
   closeEventThreads,
   closeThreadsByIds,
   ensureEventThreads
@@ -32,6 +44,7 @@ import {
   buildMonthlySlotGenerationSummary,
   generateCurrentMonthSlots
 } from "../services/monthly-slots";
+import { refreshSchedulers } from "../services/scheduler";
 import {
   SLOT_DAYS_SETTING,
   buildMonthSlots,
@@ -413,6 +426,23 @@ export async function handleButtonInteraction(
     return;
   }
 
+  if (interaction.customId === "mu_automation:configure") {
+    await showAutomationSettingsModal(interaction, config);
+    return;
+  }
+
+  if (interaction.customId === "mu_automation:reset_defaults") {
+    if (!(await ensureAdmin(interaction, config))) {
+      return;
+    }
+
+    await saveAutomationSettings(getPrisma(), DEFAULT_AUTOMATION_SETTINGS);
+    refreshSchedulers(interaction.client, config, logger);
+    const payload = await buildConfigCategoryResponse("automations", config, logger);
+    await interaction.update(toUpdatePayload(payload));
+    return;
+  }
+
   if (interaction.customId === "mu_games:configure") {
     if (!(await ensureAdmin(interaction, config))) {
       return;
@@ -721,6 +751,18 @@ export async function handleModalSubmit(
 
     const daysInput = interaction.fields.getTextInputValue("days");
     await handleSlotDaysUpdate(interaction, daysInput);
+    return;
+  }
+
+  if (interaction.customId === "mu_automation:configure_modal") {
+    if (!interaction.member || !isAdminMember(interaction.member, config)) {
+      await replyEphemeral(interaction, {
+        content: "⛔ Cette commande est réservée aux administrateurs."
+      });
+      return;
+    }
+
+    await handleAutomationSettingsUpdate(interaction, config, logger);
     return;
   }
 
@@ -1424,6 +1466,85 @@ async function handleSlotDaysUpdate(
   });
 }
 
+async function handleAutomationSettingsUpdate(
+  interaction: ModalSubmitInteraction,
+  config: AppConfig,
+  logger: Logger
+): Promise<void> {
+  const settings = parseAutomationSettingsFromModal(interaction);
+
+  if (!settings) {
+    await replyEphemeral(interaction, {
+      content: [
+        "❌ Paramètres invalides.",
+        "- Jour : nom français ou numéro 0-6 (0 = dimanche)",
+        "- Semaine du mois : 1 à 4",
+        "- Heure : HH:MM ou HHhMM",
+        "- Fenêtre d'analyse : 1 à 30 jours, ex. `21:00, 7`"
+      ].join("\n")
+    });
+    return;
+  }
+
+  await saveAutomationSettings(getPrisma(), settings);
+  refreshSchedulers(interaction.client, config, logger);
+
+  const payload = await buildConfigCategoryResponse("automations", config, logger);
+  await replyEphemeral(interaction, {
+    content: ["✅ Automatisations mises à jour.", "", payload.content].join("\n"),
+    components: payload.components
+  });
+}
+
+function parseAutomationSettingsFromModal(
+  interaction: ModalSubmitInteraction
+): AutomationSettings | null {
+  const monthlyWeekday = parseWeekdayInput(interaction.fields.getTextInputValue("monthly_weekday"));
+  const monthlyWeek = parseWeekInput(interaction.fields.getTextInputValue("monthly_week"));
+  const monthlyTime = parseTimeInput(interaction.fields.getTextInputValue("monthly_time"));
+  const weeklyReviewWeekday = parseWeekdayInput(
+    interaction.fields.getTextInputValue("review_weekday")
+  );
+  const reviewWindow = parseReviewTimeWindowInput(
+    interaction.fields.getTextInputValue("review_time_window")
+  );
+
+  if (
+    monthlyWeekday === null ||
+    monthlyWeek === null ||
+    monthlyTime === null ||
+    weeklyReviewWeekday === null ||
+    reviewWindow === null
+  ) {
+    return null;
+  }
+
+  return {
+    monthlyWeekday,
+    monthlyWeek,
+    monthlyTime,
+    weeklyReviewWeekday,
+    weeklyReviewTime: reviewWindow.time,
+    weeklyReviewLookaheadDays: reviewWindow.lookaheadDays
+  };
+}
+
+function parseReviewTimeWindowInput(input: string): { time: string; lookaheadDays: number } | null {
+  const match = input.trim().match(/^(.+?)(?:[,;]|\s+)(\d{1,2})$/);
+  if (!match) {
+    return null;
+  }
+
+  const time = parseTimeInput(match[1]);
+  const lookaheadDays = parseLookaheadInput(match[2]);
+
+  if (!time || lookaheadDays === null) {
+    return null;
+  }
+
+  return { time, lookaheadDays };
+}
+
 async function handleDeleteDateConfirm(
   interaction: EphemeralInteraction,
   config: AppConfig,
@@ -1864,13 +1985,14 @@ function buildSlotsRow() {
   };
 }
 
-type ConfigCategory = "home" | "slots" | "matches" | "tables";
+type ConfigCategory = "home" | "slots" | "matches" | "tables" | "automations";
 
 const CONFIG_CATEGORIES: { value: ConfigCategory; label: string; description: string }[] = [
   { value: "home", label: "Accueil", description: "Vue d'ensemble" },
   { value: "slots", label: "Créneaux", description: "Gérer les créneaux" },
   { value: "matches", label: "Parties", description: "Gérer les parties" },
-  { value: "tables", label: "Tables", description: "Gérer les tables" }
+  { value: "tables", label: "Tables", description: "Gérer les tables" },
+  { value: "automations", label: "Automatisations", description: "Planifier les actions" }
 ];
 
 function buildConfigMenuSelect(selected?: ConfigCategory) {
@@ -2019,6 +2141,28 @@ function buildTablesCategoryRows() {
           type: 2,
           custom_id: "mu_tables:show",
           label: "Voir",
+          style: ButtonStyle.Secondary
+        }
+      ]
+    }
+  ];
+}
+
+function buildAutomationsCategoryRows() {
+  return [
+    {
+      type: 1,
+      components: [
+        {
+          type: 2,
+          custom_id: "mu_automation:configure",
+          label: "Configurer",
+          style: ButtonStyle.Primary
+        },
+        {
+          type: 2,
+          custom_id: "mu_automation:reset_defaults",
+          label: "Valeurs par défaut",
           style: ButtonStyle.Secondary
         }
       ]
@@ -2296,6 +2440,7 @@ async function buildConfigMenuContent(config: AppConfig): Promise<string> {
   const slotDays = await getSlotDays(prisma);
   const games = await listActiveGames(prisma);
   const language = await getBotLanguage(prisma);
+  const automationSettings = await getAutomationSettings(prisma);
   const now = dayjs().tz(config.timezone);
   const offset = now.format("Z");
   const slotsTable = await buildRegisteredSlotsTable(config);
@@ -2305,7 +2450,8 @@ async function buildConfigMenuContent(config: AppConfig): Promise<string> {
     `Langue : ${formatLanguageLabel(language)}`,
     `Fuseau horaire : (UTC${offset}) ${config.timezone}`,
     `Jours des créneaux : ${formatSlotDays(slotDays)}`,
-    `Jeux actifs : ${formatGamesInline(games)}`
+    `Jeux actifs : ${formatGamesInline(games)}`,
+    ...formatAutomationSettings(automationSettings)
   ];
 
   const baseQuote = baseLines.map((line) => `> ${line}`).join("\n");
@@ -2364,9 +2510,21 @@ async function buildConfigCategoryResponse(
     };
   }
 
+  if (category === "tables") {
+    return {
+      content: buildConfigCategoryContent("**Tables**"),
+      components: [buildConfigMenuSelect("tables"), ...buildTablesCategoryRows()]
+    };
+  }
+
+  const automationSettings = await getAutomationSettings(getPrisma());
   return {
-    content: buildConfigCategoryContent("**Tables**"),
-    components: [buildConfigMenuSelect("tables"), ...buildTablesCategoryRows()]
+    content: [
+      buildConfigCategoryContent("**Automatisations**"),
+      "",
+      ...formatAutomationSettings(automationSettings)
+    ].join("\n"),
+    components: [buildConfigMenuSelect("automations"), ...buildAutomationsCategoryRows()]
   };
 }
 
@@ -2986,6 +3144,103 @@ async function showSlotDaysModal(interaction: ButtonInteraction, config: AppConf
             style: TextInputStyle.Short,
             required: true,
             placeholder: "ven"
+          }
+        ]
+      }
+    ]
+  };
+
+  await interaction.showModal(modal as ModalPayload);
+}
+
+async function showAutomationSettingsModal(
+  interaction: ButtonInteraction,
+  config: AppConfig
+): Promise<void> {
+  if (!interaction.inGuild()) {
+    await replyEphemeral(interaction, { content: "Commande réservée au serveur." });
+    return;
+  }
+
+  if (!interaction.member || !isAdminMember(interaction.member, config)) {
+    await replyEphemeral(interaction, {
+      content: "⛔ Cette commande est réservée aux administrateurs."
+    });
+    return;
+  }
+
+  const settings = await getAutomationSettings(getPrisma());
+  const modal = {
+    custom_id: "mu_automation:configure_modal",
+    title: "Configurer les automatisations",
+    components: [
+      {
+        type: 1,
+        components: [
+          {
+            type: 4,
+            custom_id: "monthly_weekday",
+            label: "Jour génération mensuelle",
+            style: TextInputStyle.Short,
+            required: true,
+            value: formatWeekday(settings.monthlyWeekday),
+            placeholder: "dimanche"
+          }
+        ]
+      },
+      {
+        type: 1,
+        components: [
+          {
+            type: 4,
+            custom_id: "monthly_week",
+            label: "Semaine du mois (1 à 4)",
+            style: TextInputStyle.Short,
+            required: true,
+            value: String(settings.monthlyWeek),
+            placeholder: "1"
+          }
+        ]
+      },
+      {
+        type: 1,
+        components: [
+          {
+            type: 4,
+            custom_id: "monthly_time",
+            label: "Heure génération mensuelle",
+            style: TextInputStyle.Short,
+            required: true,
+            value: settings.monthlyTime,
+            placeholder: "09:00"
+          }
+        ]
+      },
+      {
+        type: 1,
+        components: [
+          {
+            type: 4,
+            custom_id: "review_weekday",
+            label: "Jour du récap parties",
+            style: TextInputStyle.Short,
+            required: true,
+            value: formatWeekday(settings.weeklyReviewWeekday),
+            placeholder: "mercredi"
+          }
+        ]
+      },
+      {
+        type: 1,
+        components: [
+          {
+            type: 4,
+            custom_id: "review_time_window",
+            label: "Récap : heure, fenêtre jours",
+            style: TextInputStyle.Short,
+            required: true,
+            value: `${settings.weeklyReviewTime}, ${settings.weeklyReviewLookaheadDays}`,
+            placeholder: "21:00, 7"
           }
         ]
       }
