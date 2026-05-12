@@ -101,7 +101,7 @@ function buildThreadAdminRow(
       {
         type: 2,
         custom_id: `mu_thread:validate:${eventId}:${gameId}`,
-        label: "Valider possibles",
+        label: "Confirmer",
         style: ButtonStyle.Success
       }
     ]

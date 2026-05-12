@@ -145,7 +145,7 @@ Each generated game thread also includes admin-only buttons:
 
 - `État` — show tables, pending/validated matches, and remaining capacity for this game
 - `Tables` — update the table count for this game only
-- `Valider possibles` — validate pending matches for this game up to the available capacity
+- `Confirmer` — validate pending matches for this game up to the available capacity
 
 ## Automations
 

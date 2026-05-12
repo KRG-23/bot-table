@@ -22,7 +22,7 @@ Objectif : s'assurer qu'un admin peut tout faire via les commandes **ou** via l'
 | Tables          | Voir les tables par jeu    | `/mu_tables show`        | Bouton “Voir” + modal                                  |
 | Thread admin    | Voir l’état du fil         | _N/A (fil uniquement)_   | Bouton “État” dans le fil                              |
 | Thread admin    | Définir tables du jeu      | `/mu_tables set [game]`  | Bouton “Tables” dans le fil + modal                    |
-| Thread admin    | Valider ce qui rentre      | _N/A (fil uniquement)_   | Bouton “Valider possibles” dans le fil                 |
+| Thread admin    | Valider ce qui rentre      | _N/A (fil uniquement)_   | Bouton “Confirmer” dans le fil                         |
 | Parties         | Créer une partie           | `/mu_match create`       | Bouton “Créer une partie” + modal                      |
 | Parties         | Valider une partie         | `/mu_match validate`     | Bouton “Valider” + modal                               |
 | Parties         | Refuser une partie         | `/mu_match refuse`       | Bouton “Refuser” + modal                               |
