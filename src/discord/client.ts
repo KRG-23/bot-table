@@ -2,6 +2,7 @@ import { Client, GatewayIntentBits, Partials } from "discord.js";
 import type { Logger } from "pino";
 
 import type { AppConfig } from "../config";
+import { startMonthlySlotsScheduler } from "../services/scheduler";
 
 import {
   handleButtonInteraction,
@@ -33,6 +34,7 @@ export function createClient(config: AppConfig, logger: Logger): Client {
       },
       "Discord client ready"
     );
+    startMonthlySlotsScheduler(client, config, logger);
   });
 
   client.on("interactionCreate", async (interaction) => {

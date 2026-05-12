@@ -18,11 +18,20 @@ import type { Logger } from "pino";
 import type { AppConfig } from "../config";
 import { getPrisma } from "../db";
 import {
+  closeEventThreads,
+  closeThreadsByIds,
+  ensureEventThreads
+} from "../services/event-threads";
+import {
   listActiveGames,
   listAllGames,
   normalizeGameInput,
   resolveGameFromInput
 } from "../services/games";
+import {
+  buildMonthlySlotGenerationSummary,
+  generateCurrentMonthSlots
+} from "../services/monthly-slots";
 import {
   SLOT_DAYS_SETTING,
   buildMonthSlots,
@@ -66,6 +75,9 @@ type ChannelLike = {
 
 type ModalPayload = Parameters<ButtonInteraction["showModal"]>[0];
 type ChannelWithText = { isTextBased: () => boolean } | null;
+type SendableChannel = {
+  send: (payload: { content: string; components?: ReplyComponents }) => Promise<Message>;
+};
 const FRENCH_MONTHS = [
   "janvier",
   "février",
@@ -1229,9 +1241,9 @@ async function handleTablesSet(
   });
 
   if (isClosed) {
-    await closeEventThreads(interaction, logger, event.id);
+    await closeEventThreads(interaction.client, logger, event.id);
   } else {
-    await ensureEventThreads(interaction, config, logger, event);
+    await ensureEventThreads(interaction.client, config, logger, event);
   }
 }
 
@@ -1297,53 +1309,10 @@ async function handleGenerateSlots(
 ): Promise<void> {
   await replyEphemeral(interaction, { content: "⏳ Génération des créneaux en cours..." });
 
-  const prisma = getPrisma();
-  const monthName = dayjs().tz(config.timezone).format("MMMM YYYY");
-  const slotDays = await getSlotDays(prisma);
-  const slots = buildMonthSlots(config.timezone, slotDays);
-
-  let created = 0;
-  let skipped = 0;
-  let closedSkipped = 0;
-
-  for (const slotDate of slots) {
-    const existing = await prisma.event.findUnique({ where: { date: slotDate.toDate() } });
-    if (existing) {
-      if (existing.status === "OUVERT") {
-        await ensureEventThreads(interaction, config, logger, existing);
-      }
-      skipped += 1;
-      continue;
-    }
-
-    const closure = await getClosureInfo(slotDate, config.vacationAcademy, config.timezone, logger);
-    if (closure.closed) {
-      closedSkipped += 1;
-      continue;
-    }
-
-    const event = await prisma.event.create({
-      data: {
-        date: slotDate.toDate(),
-        tables: 0,
-        status: "OUVERT",
-        isVacation: false
-      }
-    });
-
-    await ensureEventThreads(interaction, config, logger, event);
-    created += 1;
-  }
-
-  const summary = [
-    `📅 Créneaux du mois (${monthName})`,
-    `Nouveaux créneaux : ${created}`,
-    `Déjà présents : ${skipped}`,
-    `Fermés (vacances/veille, non créés) : ${closedSkipped}`
-  ].join("\n");
+  const result = await generateCurrentMonthSlots(interaction.client, config, logger);
 
   await interaction.editReply({
-    content: summary,
+    content: buildMonthlySlotGenerationSummary(result),
     components: [buildSlotsRow()]
   });
 }
@@ -1496,7 +1465,7 @@ async function handleDeleteDateConfirm(
   ]);
 
   await closeThreadsByIds(
-    interaction,
+    interaction.client,
     logger,
     threads.map((thread) => thread.threadId)
   );
@@ -1557,7 +1526,7 @@ async function handleDeleteMonthConfirm(
   ]);
 
   await closeThreadsByIds(
-    interaction,
+    interaction.client,
     logger,
     threads.map((thread) => thread.threadId)
   );
@@ -2525,15 +2494,6 @@ function buildMatchSummary(
   return `${formatFrenchDate(eventDate)} — <@${match.player1.discordId}> vs <@${match.player2.discordId}> (${gameLabel})`;
 }
 
-function formatThreadDayMonth(date: dayjs.Dayjs): string {
-  const month = FRENCH_MONTHS[date.month()] ?? date.format("MMMM");
-  return `${date.date()} ${month}`;
-}
-
-function buildThreadName(game: Game, date: dayjs.Dayjs): string {
-  return `Soirée ${game.label} le ${formatThreadDayMonth(date)}`;
-}
-
 function parseUserIdInput(input: string): string | null {
   const trimmed = input.trim();
   const mentionMatch = trimmed.match(/<@!?([0-9]+)>/);
@@ -2546,145 +2506,6 @@ function parseUserIdInput(input: string): string | null {
   }
 
   return null;
-}
-
-type SendableChannel = {
-  send: (payload: { content: string; components?: ReplyComponents }) => Promise<Message>;
-  isThread?: () => boolean;
-};
-
-type ThreadStarterMessage = {
-  startThread: (options: { name: string; autoArchiveDuration?: number }) => Promise<{ id: string }>;
-};
-
-function isSendableChannel(channel: unknown): channel is SendableChannel {
-  if (!channel || typeof channel !== "object") {
-    return false;
-  }
-
-  return "send" in channel && typeof (channel as SendableChannel).send === "function";
-}
-
-function isThreadStarterMessage(message: unknown): message is ThreadStarterMessage {
-  if (!message || typeof message !== "object") {
-    return false;
-  }
-
-  return (
-    "startThread" in message && typeof (message as ThreadStarterMessage).startThread === "function"
-  );
-}
-
-async function ensureEventThreads(
-  interaction: EphemeralInteraction,
-  config: AppConfig,
-  logger: Logger,
-  event: { id: number; date: Date }
-): Promise<void> {
-  const prisma = getPrisma();
-  const existing = await prisma.eventThread.findMany({ where: { eventId: event.id } });
-  const existingGames = new Set(existing.map((thread) => thread.gameId));
-  const eventDate = dayjs(event.date).tz(config.timezone);
-  const games = await listActiveGames(prisma);
-
-  for (const game of games) {
-    if (existingGames.has(game.id)) {
-      continue;
-    }
-
-    const threadName = buildThreadName(game, eventDate);
-    const starterContent = `Créneau ${game.label} — ${formatFrenchDate(eventDate)}.`;
-
-    const channel = await interaction.client.channels.fetch(game.channelId);
-
-    if (!isSendableChannel(channel)) {
-      logger.warn(
-        { channelId: game.channelId, gameId: game.id },
-        "Channel not found or not sendable"
-      );
-      continue;
-    }
-
-    if (channel.isThread?.()) {
-      logger.warn({ channelId: game.channelId, gameId: game.id }, "Configured channel is a thread");
-      continue;
-    }
-
-    try {
-      const starter = await channel.send({ content: starterContent });
-      if (!isThreadStarterMessage(starter)) {
-        logger.warn({ eventId: event.id }, "Starter message does not support threads");
-        continue;
-      }
-
-      const thread = await starter.startThread({
-        name: threadName,
-        autoArchiveDuration: 10080
-      });
-
-      await prisma.eventThread.create({
-        data: {
-          eventId: event.id,
-          gameId: game.id,
-          threadId: thread.id
-        }
-      });
-    } catch (err) {
-      logger.warn({ err, gameId: game.id, eventId: event.id }, "Failed to create thread");
-    }
-  }
-}
-
-async function closeEventThreads(
-  interaction: EphemeralInteraction,
-  logger: Logger,
-  eventId: number
-): Promise<void> {
-  const prisma = getPrisma();
-  const threads = await prisma.eventThread.findMany({
-    where: { eventId },
-    select: { threadId: true }
-  });
-
-  if (threads.length === 0) {
-    return;
-  }
-
-  await prisma.eventThread.deleteMany({ where: { eventId } });
-  await closeThreadsByIds(
-    interaction,
-    logger,
-    threads.map((thread) => thread.threadId)
-  );
-}
-
-async function closeThreadsByIds(
-  interaction: EphemeralInteraction,
-  logger: Logger,
-  threadIds: string[]
-): Promise<void> {
-  for (const threadId of threadIds) {
-    try {
-      const channel = await interaction.client.channels.fetch(threadId);
-      if (!channel || !("isThread" in channel) || !channel.isThread()) {
-        continue;
-      }
-
-      try {
-        await channel.setArchived(true);
-      } catch (err) {
-        logger.warn({ err, threadId }, "Failed to archive thread");
-      }
-
-      try {
-        await channel.delete("Soirée annulée");
-      } catch (err) {
-        logger.warn({ err, threadId }, "Failed to delete thread");
-      }
-    } catch (err) {
-      logger.warn({ err, threadId }, "Failed to fetch thread");
-    }
-  }
 }
 
 async function handleMatchValidate(
