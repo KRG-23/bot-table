@@ -1,3 +1,4 @@
+import type { Event } from "@prisma/client";
 import dayjs from "dayjs";
 import type { Client } from "discord.js";
 import type { Logger } from "pino";
@@ -7,6 +8,7 @@ import { getPrisma } from "../db";
 
 import { ensureEventThreads } from "./event-threads";
 import { buildMonthSlots, getSlotDays } from "./slots";
+import { buildDefaultGameTableAllocations, replaceGameTableCapacities } from "./table-capacity";
 import { getClosureInfo } from "./vacations";
 
 export type MonthlySlotGenerationResult = {
@@ -53,11 +55,14 @@ export async function generateCurrentMonthSlots(
   for (const slotDate of slots) {
     const existing = await prisma.event.findUnique({ where: { date: slotDate.toDate() } });
     if (existing) {
-      if (existing.status === "OUVERT" && existing.tables > 0) {
-        const threads = await ensureEventThreads(client, config, logger, existing);
-        result.threadsCreated += threads.created;
-        result.threadsExisting += threads.existing;
-        result.threadsFailed += threads.failed;
+      if (existing.status === "OUVERT") {
+        const event = await applyDefaultTablesIfMissing(existing);
+        if (event.tables > 0) {
+          const threads = await ensureEventThreads(client, config, logger, event);
+          result.threadsCreated += threads.created;
+          result.threadsExisting += threads.existing;
+          result.threadsFailed += threads.failed;
+        }
       }
       result.skipped += 1;
       continue;
@@ -69,7 +74,7 @@ export async function generateCurrentMonthSlots(
       continue;
     }
 
-    await prisma.event.create({
+    const event = await prisma.event.create({
       data: {
         date: slotDate.toDate(),
         tables: 0,
@@ -78,8 +83,44 @@ export async function generateCurrentMonthSlots(
       }
     });
 
+    const eventWithDefaults = await applyDefaultTablesIfMissing(event);
+    if (eventWithDefaults.tables > 0) {
+      const threads = await ensureEventThreads(client, config, logger, eventWithDefaults);
+      result.threadsCreated += threads.created;
+      result.threadsExisting += threads.existing;
+      result.threadsFailed += threads.failed;
+    }
+
     result.created += 1;
   }
 
   return result;
+
+  async function applyDefaultTablesIfMissing(event: Event): Promise<Event> {
+    const configuredTables = await prisma.eventGameCapacity.count({
+      where: { eventId: event.id }
+    });
+
+    if (configuredTables > 0 || event.tables > 0) {
+      return event;
+    }
+
+    const allocations = await buildDefaultGameTableAllocations(prisma);
+    const totalTables = allocations.reduce((total, allocation) => total + allocation.tables, 0);
+
+    if (totalTables <= 0) {
+      return event;
+    }
+
+    await replaceGameTableCapacities(prisma, event.id, allocations);
+
+    return prisma.event.update({
+      where: { id: event.id },
+      data: {
+        tables: totalTables,
+        status: "OUVERT",
+        isVacation: false
+      }
+    });
+  }
 }

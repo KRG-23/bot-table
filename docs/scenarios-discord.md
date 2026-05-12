@@ -35,6 +35,7 @@ Objectif : s'assurer qu'un admin peut tout faire via les commandes **ou** via l'
 - Le menu `/mu_config` est public, mais les actions admin restent protégées par rôle.
 - L’onglet “Accueil” propose le choix de langue et un tableau des créneaux enregistrés, avec un rappel des paramètres de base en citation.
 - La catégorie “Jeux” sépare le référentiel jeux/canaux de la gestion des créneaux.
+- La génération mensuelle applique les tables par défaut `W40K=5`, `AoS=2` aux nouveaux créneaux et aux créneaux ouverts sans table.
 - Les jeux sont configurés dynamiquement et chaque jeu doit avoir un canal associé.
 - La catégorie “Tables” permet de répartir les tables par jeu ; elle propose un dropdown de jeux et les défauts `W40K=5`, `AoS=2`.
 - Chaque fil de soirée expose un mini-panneau admin limité au jeu + créneau du fil.

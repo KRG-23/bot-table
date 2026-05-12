@@ -2733,18 +2733,6 @@ function buildTablesRow() {
         custom_id: "mu_tables:show",
         label: "Voir les tables",
         style: ButtonStyle.Secondary
-      },
-      {
-        type: 2,
-        custom_id: "mu_slots:generate_current_month",
-        label: "Générer les créneaux du mois",
-        style: ButtonStyle.Secondary
-      },
-      {
-        type: 2,
-        custom_id: "mu_slots:delete_month",
-        label: "Supprimer créneaux du mois",
-        style: ButtonStyle.Danger
       }
     ]
   };

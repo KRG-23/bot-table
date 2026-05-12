@@ -151,7 +151,7 @@ Each generated game thread also includes admin-only buttons:
 
 When the bot is ready, it schedules the next automation runs in `TZ` (default `Europe/Paris`) without polling continuously. The schedule is configurable from `/mu_config` > “Automatisations”; saved changes refresh the in-memory scheduler.
 
-Monthly slot generation runs by default on the first Sunday of the month at 09:00. It generates the current month's configured slots once, skips school holiday/holiday-eve closures, and posts a summary in `DISCORD_CHANNEL_ID`. Per-game threads are created when the corresponding game has tables configured for the slot.
+Monthly slot generation runs by default on the first Sunday of the month at 09:00. It generates the current month's configured slots once, skips school holiday/holiday-eve closures, applies the default per-game table counts (`W40K=5`, `AoS=2`) to new or empty slots, and posts a summary in `DISCORD_CHANNEL_ID`. Per-game threads are created when the corresponding game has tables configured for the slot.
 
 - existing slots are reused
 - missing per-game threads are recreated for open slots with configured tables for that game

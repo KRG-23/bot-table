@@ -20,7 +20,7 @@
    - Création ou réactivation d’un fil par jeu au format « Soirée <Jeu> le <date du vendredi> » pour les créneaux du mois, uniquement lorsque des tables sont configurées pour ce jeu. Par défaut, les fils du mois sont préparés le **premier dimanche du mois à 09h00**.
    - Le jour, la semaine du mois et l’heure sont paramétrables depuis le menu de configuration.
    - Si le vendredi correspondant est **veille de vacances scolaires de l’académie de Nantes** ou pendant ces vacances, le fil n’est pas créé et aucune partie n’est autorisée.
-   - Un admin saisit le **nombre de tables par jeu** via commande ou menu de configuration, par exemple `W40K=5, AoS=2`.
+   - Les créneaux partent des tables par défaut `W40K=5`, `AoS=2`; un admin ajuste ensuite le **nombre de tables par jeu** via commande ou menu de configuration.
 
 2. **Dimanche → Mercredi**
    - Les joueurs s’entendent et **notent le bot** dans le fil avec la mention des deux pseudos (ex. `@Bot @Joueur1 vs @Joueur2`), en indiquant le système de jeu.
