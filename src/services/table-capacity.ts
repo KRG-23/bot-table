@@ -1,6 +1,17 @@
 import type { Event, Game, PrismaClient } from "@prisma/client";
 
-import { listActiveGames, resolveGameFromInput } from "./games";
+import { listActiveGames, normalizeGameInput, resolveGameFromInput } from "./games";
+
+const DEFAULT_GAME_TABLE_COUNTS = [
+  {
+    aliases: ["w40k", "warhammer 40000", "warhammer 40k"],
+    tables: 5
+  },
+  {
+    aliases: ["aos", "age of sigmar"],
+    tables: 2
+  }
+];
 
 export type GameTableAllocation = {
   game: Game;
@@ -17,6 +28,28 @@ export type EventTableCapacity = {
   totalTables: number;
   gameTables: GameTableCapacity[];
 };
+
+export function getDefaultGameTableCount(game: Pick<Game, "code" | "label">): number {
+  const normalizedValues = [normalizeGameInput(game.code), normalizeGameInput(game.label)];
+  const defaultEntry = DEFAULT_GAME_TABLE_COUNTS.find((entry) =>
+    entry.aliases.some((alias) => normalizedValues.includes(normalizeGameInput(alias)))
+  );
+
+  return defaultEntry?.tables ?? 0;
+}
+
+export async function buildDefaultGameTableAllocations(
+  prisma: PrismaClient
+): Promise<GameTableAllocation[]> {
+  const games = await listActiveGames(prisma);
+
+  return games
+    .map((game) => ({
+      game,
+      tables: getDefaultGameTableCount(game)
+    }))
+    .filter((allocation) => allocation.tables > 0);
+}
 
 export async function parseGameTableAllocations(
   prisma: PrismaClient,

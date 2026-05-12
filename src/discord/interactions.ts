@@ -55,11 +55,13 @@ import {
   parseSlotDaysInput
 } from "../services/slots";
 import {
+  type GameTableAllocation,
+  buildDefaultGameTableAllocations,
   formatGameTableCapacities,
   formatTableCount,
+  getDefaultGameTableCount,
   getEventTableCapacity,
   getGameTableCapacity,
-  parseGameTableAllocations,
   recalculateEventTables,
   replaceGameTableCapacities,
   upsertGameTableCapacity
@@ -91,9 +93,7 @@ type ReplyPayload = {
   content: string;
   components?: ReplyComponents;
 };
-type ParsedGameTableAllocations = Awaited<
-  ReturnType<typeof parseGameTableAllocations>
->["allocations"];
+type ParsedGameTableAllocations = GameTableAllocation[];
 
 type ChannelLike = {
   id: string;
@@ -436,6 +436,16 @@ export async function handleButtonInteraction(
     return;
   }
 
+  if (interaction.customId.startsWith("mu_tables:set_game:")) {
+    await showTablesGameModal(interaction, config);
+    return;
+  }
+
+  if (interaction.customId.startsWith("mu_tables:apply_defaults:")) {
+    await handleTablesApplyDefaults(interaction, config, logger);
+    return;
+  }
+
   if (interaction.customId.startsWith("mu_thread:status:")) {
     await handleThreadStatus(interaction, config);
     return;
@@ -701,6 +711,25 @@ export async function handleSelectMenuInteraction(
       channelId
     });
     await interaction.update(toUpdatePayload(payload));
+    return;
+  }
+
+  if (interaction.customId.startsWith("mu_tables:game_select:")) {
+    if (!(await ensureAdmin(interaction, config))) {
+      return;
+    }
+
+    const dateKey = interaction.customId.replace("mu_tables:game_select:", "");
+    const parsedDate = parseTableDateKey(dateKey, config.timezone);
+    const selectedGameId = Number(interaction.values[0]);
+
+    if (!parsedDate || !Number.isInteger(selectedGameId)) {
+      await replyEphemeral(interaction, { content: "❌ Sélection invalide." });
+      return;
+    }
+
+    const payload = await buildTablesGameConfigPayload(config, parsedDate, selectedGameId);
+    await interaction.update(toUpdatePayload(payload));
   }
 }
 
@@ -723,7 +752,6 @@ export async function handleModalSubmit(
     }
 
     const dateInput = interaction.fields.getTextInputValue("date");
-    const allocationInput = interaction.fields.getTextInputValue("allocations");
     const parsedDate = parseFrenchDate(dateInput, config.timezone);
 
     if (!parsedDate) {
@@ -733,7 +761,13 @@ export async function handleModalSubmit(
       return;
     }
 
-    await handleGameTablesSetFromInput(interaction, config, logger, parsedDate, allocationInput);
+    const payload = await buildTablesGameConfigPayload(config, parsedDate);
+    await replyEphemeral(interaction, payload);
+    return;
+  }
+
+  if (interaction.customId.startsWith("mu_tables:set_game_modal:")) {
+    await handleTablesGameModal(interaction, config, logger);
     return;
   }
 
@@ -1335,28 +1369,255 @@ async function handleTablesSet(
   }
 }
 
-async function handleGameTablesSetFromInput(
-  interaction: EphemeralInteraction,
+function formatTableDateKey(date: dayjs.Dayjs): string {
+  return date.format("YYYY-MM-DD");
+}
+
+function parseTableDateKey(dateKey: string, timezone: string): dayjs.Dayjs | null {
+  const parsedDate = dayjs.tz(dateKey, "YYYY-MM-DD", timezone).startOf("day");
+  return parsedDate.isValid() ? parsedDate : null;
+}
+
+async function buildTablesGameConfigPayload(
   config: AppConfig,
-  logger: Logger,
-  parsedDate: ReturnType<typeof parseFrenchDate>,
-  allocationInput: string
+  parsedDate: dayjs.Dayjs,
+  selectedGameId?: number
+): Promise<ReplyPayload> {
+  const prisma = getPrisma();
+  const activeGames = await listActiveGames(prisma);
+  const event = await prisma.event.findUnique({ where: { date: parsedDate.toDate() } });
+  const capacity = event ? await getEventTableCapacity(prisma, event) : null;
+  const capacityByGame = new Map(
+    capacity?.gameTables.map((entry) => [entry.game.id, entry.tables]) ?? []
+  );
+
+  if (activeGames.length === 0) {
+    return {
+      content: [
+        "**Définir les tables par jeu**",
+        `Date : ${formatFrenchDate(parsedDate)}`,
+        "",
+        "Aucun jeu actif configuré. Ajoute d'abord un jeu dans “Jeux & canaux”."
+      ].join("\n"),
+      components: [buildBackToConfigRow()]
+    };
+  }
+
+  const selectedGame = activeGames.find((game) => game.id === selectedGameId) ?? activeGames[0];
+  const dateKey = formatTableDateKey(parsedDate);
+  const tableLines = activeGames.map((game) => {
+    const current = capacity?.usesGameCapacities ? (capacityByGame.get(game.id) ?? 0) : 0;
+    const fallback = getDefaultGameTableCount(game);
+    const defaultText = fallback > 0 ? ` — défaut ${fallback}` : "";
+    return `• ${game.label} : ${formatTableCount(current)}${defaultText}`;
+  });
+  const globalNotice =
+    event && !capacity?.usesGameCapacities && event.tables > 0
+      ? `⚠️ Ce créneau utilise encore un total non réparti : ${formatTableCount(event.tables)}.`
+      : null;
+
+  return {
+    content: [
+      "**Définir les tables par jeu**",
+      `Date : ${formatFrenchDate(parsedDate)}`,
+      globalNotice,
+      "",
+      "Choisis un jeu dans la liste, puis saisis son nombre de tables.",
+      "Tu peux aussi appliquer les valeurs par défaut : W40K = 5, AoS = 2.",
+      "",
+      `Jeu sélectionné : ${selectedGame.label}`,
+      "",
+      "Répartition actuelle :",
+      ...tableLines
+    ]
+      .filter(Boolean)
+      .join("\n"),
+    components: [
+      buildTablesGameSelectRow(dateKey, activeGames, selectedGame.id, capacityByGame),
+      buildTablesGameActionRow(dateKey, selectedGame.id),
+      buildBackToConfigRow()
+    ]
+  };
+}
+
+function buildTablesGameSelectRow(
+  dateKey: string,
+  games: Game[],
+  selectedGameId: number,
+  capacityByGame: Map<number, number>
+): ReplyComponentRow {
+  return {
+    type: 1,
+    components: [
+      {
+        type: 3,
+        custom_id: `mu_tables:game_select:${dateKey}`,
+        placeholder: "Choisir un jeu",
+        min_values: 1,
+        max_values: 1,
+        options: games.slice(0, 25).map((game) => {
+          const current = capacityByGame.get(game.id) ?? 0;
+          const fallback = getDefaultGameTableCount(game);
+          const description =
+            fallback > 0
+              ? `Actuel ${current} table(s), défaut ${fallback}`
+              : `Actuel ${current} table(s)`;
+
+          return {
+            label: game.label.slice(0, 100),
+            value: String(game.id),
+            description: description.slice(0, 100),
+            default: game.id === selectedGameId
+          };
+        })
+      }
+    ]
+  } as ReplyComponentRow;
+}
+
+function buildTablesGameActionRow(dateKey: string, gameId: number): ReplyComponentRow {
+  return {
+    type: 1,
+    components: [
+      {
+        type: 2,
+        custom_id: `mu_tables:set_game:${dateKey}:${gameId}`,
+        label: "Saisir les tables",
+        style: ButtonStyle.Primary
+      },
+      {
+        type: 2,
+        custom_id: `mu_tables:apply_defaults:${dateKey}`,
+        label: "Appliquer défauts",
+        style: ButtonStyle.Secondary
+      }
+    ]
+  } as ReplyComponentRow;
+}
+
+async function showTablesGameModal(
+  interaction: ButtonInteraction,
+  config: AppConfig
 ): Promise<void> {
+  if (!(await ensureAdmin(interaction, config))) {
+    return;
+  }
+
+  const context = parseTablesGameContext(interaction.customId, "mu_tables:set_game:");
+  if (!context) {
+    await replyEphemeral(interaction, { content: "❌ Contexte invalide." });
+    return;
+  }
+
+  const parsedDate = parseTableDateKey(context.dateKey, config.timezone);
   if (!parsedDate) {
+    await replyEphemeral(interaction, { content: "❌ Date invalide." });
     return;
   }
 
   const prisma = getPrisma();
-  const { allocations, errors } = await parseGameTableAllocations(prisma, allocationInput);
+  const [event, game] = await Promise.all([
+    prisma.event.findUnique({ where: { date: parsedDate.toDate() } }),
+    prisma.game.findUnique({ where: { id: context.gameId } })
+  ]);
 
-  if (errors.length > 0) {
+  if (!game) {
+    await replyEphemeral(interaction, { content: "❌ Jeu introuvable." });
+    return;
+  }
+
+  const current = event ? await getGameTableCapacity(prisma, event, game.id) : 0;
+  const defaultValue = current > 0 ? current : getDefaultGameTableCount(game);
+  const modal = {
+    custom_id: `mu_tables:set_game_modal:${context.dateKey}:${game.id}`,
+    title: `Tables ${game.label}`.slice(0, 45),
+    components: [
+      {
+        type: 1,
+        components: [
+          {
+            type: 4,
+            custom_id: "count",
+            label: `Tables pour ${game.label}`.slice(0, 45),
+            style: TextInputStyle.Short,
+            required: true,
+            value: String(defaultValue),
+            placeholder: String(getDefaultGameTableCount(game))
+          }
+        ]
+      }
+    ]
+  };
+
+  await interaction.showModal(modal as ModalPayload);
+}
+
+async function handleTablesGameModal(
+  interaction: ModalSubmitInteraction,
+  config: AppConfig,
+  logger: Logger
+): Promise<void> {
+  if (!(await ensureAdmin(interaction, config))) {
+    return;
+  }
+
+  const context = parseTablesGameContext(interaction.customId, "mu_tables:set_game_modal:");
+  const parsedDate = context ? parseTableDateKey(context.dateKey, config.timezone) : null;
+  const count = Number(interaction.fields.getTextInputValue("count"));
+
+  if (!context || !parsedDate || !Number.isInteger(count) || count < 0) {
+    await replyEphemeral(interaction, { content: "❌ Saisie invalide." });
+    return;
+  }
+
+  const game = await getPrisma().game.findUnique({ where: { id: context.gameId } });
+  if (!game) {
+    await replyEphemeral(interaction, { content: "❌ Jeu introuvable." });
+    return;
+  }
+
+  await handleGameTablesSet(interaction, config, logger, parsedDate, game.code, count);
+}
+
+async function handleTablesApplyDefaults(
+  interaction: ButtonInteraction,
+  config: AppConfig,
+  logger: Logger
+): Promise<void> {
+  if (!(await ensureAdmin(interaction, config))) {
+    return;
+  }
+
+  const dateKey = interaction.customId.replace("mu_tables:apply_defaults:", "");
+  const parsedDate = parseTableDateKey(dateKey, config.timezone);
+  if (!parsedDate) {
+    await replyEphemeral(interaction, { content: "❌ Date invalide." });
+    return;
+  }
+
+  const allocations = await buildDefaultGameTableAllocations(getPrisma());
+  if (allocations.length === 0) {
     await replyEphemeral(interaction, {
-      content: [`❌ Répartition invalide.`, ...errors].join("\n")
+      content: "❌ Aucun jeu actif ne correspond aux valeurs par défaut W40K/AoS."
     });
     return;
   }
 
   await handleGameTablesSet(interaction, config, logger, parsedDate, allocations);
+}
+
+function parseTablesGameContext(
+  customId: string,
+  prefix: string
+): { dateKey: string; gameId: number } | null {
+  const [dateKey, gameIdRaw] = customId.replace(prefix, "").split(":");
+  const gameId = Number(gameIdRaw);
+
+  if (!dateKey || !Number.isInteger(gameId)) {
+    return null;
+  }
+
+  return { dateKey, gameId };
 }
 
 async function handleGameTablesSet(
@@ -4105,19 +4366,6 @@ async function showTablesSetModal(
             style: TextInputStyle.Short,
             required: true,
             placeholder: "28/02/2026"
-          }
-        ]
-      },
-      {
-        type: 1,
-        components: [
-          {
-            type: 4,
-            custom_id: "allocations",
-            label: "Tables par jeu",
-            style: TextInputStyle.Paragraph,
-            required: true,
-            placeholder: "W40K=5, AoS=2"
           }
         ]
       }
