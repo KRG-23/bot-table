@@ -13,14 +13,14 @@ Objectif : s'assurer qu'un admin peut tout faire via les commandes **ou** via l'
 | Créneaux        | Supprimer une date         | `/mu_slots delete_date`        | Bouton “Supprimer une date” + modal                    |
 | Créneaux        | Supprimer le mois          | `/mu_slots delete_month`       | Bouton “Supprimer le mois” + confirmation              |
 | Créneaux        | Configurer les jours       | `/mu_slots set_days`           | Bouton “Configurer les jours” + modal                  |
-| Jeux & canaux   | Lister les jeux            | `/mu_games list`               | Catégorie “Jeux”                                       |
-| Jeux & canaux   | Ajouter un jeu             | `/mu_games add`                | Catégorie “Jeux” + bouton “Ajouter un jeu” + modal     |
-| Jeux & canaux   | Assigner un canal          | `/mu_games set_channel`        | Sélecteur de canal + bouton “Enregistrer”              |
-| Jeux & canaux   | Tables par défaut          | `/mu_games set_default_tables` | Bouton “Tables par défaut” + modal                     |
-| Jeux & canaux   | Désactiver un jeu          | `/mu_games disable`            | Bouton “Désactiver”                                    |
-| Jeux & canaux   | Réactiver un jeu           | `/mu_games enable`             | Bouton “Réactiver”                                     |
-| Tables          | Définir les tables par jeu | `/mu_tables set [game]`        | Bouton “Définir” + date, dropdown jeu, modal tables    |
-| Tables          | Voir les tables par jeu    | `/mu_tables show`              | Bouton “Voir” + modal                                  |
+| Jeux & tables   | Lister les jeux            | `/mu_games list`               | Catégorie “Jeux & tables”                              |
+| Jeux & tables   | Ajouter un jeu             | `/mu_games add`                | Bouton “Ajouter un jeu” + modal                        |
+| Jeux & tables   | Assigner un canal          | `/mu_games set_channel`        | Sélecteur de canal + bouton “Enregistrer”              |
+| Jeux & tables   | Tables par défaut          | `/mu_games set_default_tables` | Bouton “Tables par défaut” + modal                     |
+| Jeux & tables   | Désactiver un jeu          | `/mu_games disable`            | Bouton “Désactiver”                                    |
+| Jeux & tables   | Réactiver un jeu           | `/mu_games enable`             | Bouton “Réactiver”                                     |
+| Jeux & tables   | Définir les tables par jeu | `/mu_tables set [game]`        | Dropdown date créée + dropdown jeu + modal tables      |
+| Jeux & tables   | Voir les tables par jeu    | `/mu_tables show`              | Dropdown date créée                                    |
 | Thread admin    | Voir l’état du fil         | _N/A (fil uniquement)_         | Bouton “État” dans le fil                              |
 | Thread admin    | Définir tables du jeu      | `/mu_tables set [game]`        | Bouton “Tables” dans le fil + modal                    |
 | Thread admin    | Valider ce qui rentre      | _N/A (fil uniquement)_         | Bouton “Confirmer” dans le fil                         |
@@ -35,9 +35,9 @@ Objectif : s'assurer qu'un admin peut tout faire via les commandes **ou** via l'
 
 - Le menu `/mu_config` est public, mais les actions admin restent protégées par rôle.
 - L’onglet “Accueil” propose le choix de langue et un tableau des créneaux enregistrés, avec un rappel des paramètres de base en citation.
-- La catégorie “Jeux” sépare le référentiel jeux/canaux de la gestion des créneaux.
+- La catégorie “Jeux & tables” regroupe le référentiel jeux/canaux, les tables par défaut et les tables par soirée.
 - La génération mensuelle applique les tables par défaut configurées sur les jeux actifs aux nouveaux créneaux et aux créneaux ouverts sans table.
 - Les jeux sont configurés dynamiquement et chaque jeu doit avoir un canal associé.
-- La catégorie “Tables” permet de répartir les tables par jeu ; elle propose un dropdown de jeux et les défauts définis dans “Jeux”.
+- Les tables d’une soirée se règlent en choisissant une date parmi les créneaux déjà créés, puis un jeu.
 - Chaque fil de soirée expose un mini-panneau admin limité au jeu + créneau du fil.
 - Les automatisations ont des valeurs par défaut, mais l’admin peut modifier le jour, l’heure et la fenêtre d’analyse depuis `/mu_config`.

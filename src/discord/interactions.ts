@@ -1,4 +1,4 @@
-import type { Game } from "@prisma/client";
+import type { Event, Game } from "@prisma/client";
 import { MatchStatus, NotificationType } from "@prisma/client";
 import dayjs from "dayjs";
 import { ButtonStyle, ChannelType, MessageFlags, TextInputStyle } from "discord.js";
@@ -436,12 +436,12 @@ export async function handleButtonInteraction(
   }
 
   if (interaction.customId === "mu_tables:set") {
-    await showTablesSetModal(interaction, config);
+    await showTablesDateSelect(interaction, config, "set");
     return;
   }
 
   if (interaction.customId === "mu_tables:show") {
-    await showTablesShowModal(interaction, config);
+    await showTablesDateSelect(interaction, config, "show");
     return;
   }
 
@@ -728,6 +728,29 @@ export async function handleSelectMenuInteraction(
       gameId,
       channelId
     });
+    await interaction.update(toUpdatePayload(payload));
+    return;
+  }
+
+  if (interaction.customId.startsWith("mu_tables:date_select:")) {
+    if (!(await ensureAdmin(interaction, config))) {
+      return;
+    }
+
+    const action = parseTablesDateAction(interaction.customId);
+    const selectedDate = interaction.values[0];
+    const parsedDate = parseTableDateKey(selectedDate, config.timezone);
+
+    if (!action || !parsedDate) {
+      await replyEphemeral(interaction, { content: "❌ Sélection invalide." });
+      return;
+    }
+
+    const payload =
+      action === "set"
+        ? await buildTablesGameConfigPayload(config, parsedDate)
+        : await buildTablesShowPayload(config, logger, parsedDate);
+
     await interaction.update(toUpdatePayload(payload));
     return;
   }
@@ -1511,6 +1534,109 @@ function parseTableDateKey(dateKey: string, timezone: string): dayjs.Dayjs | nul
   return parsedDate.isValid() ? parsedDate : null;
 }
 
+type TablesDateAction = "set" | "show";
+
+function parseTablesDateAction(customId: string): TablesDateAction | null {
+  const action = customId.replace("mu_tables:date_select:", "");
+  return action === "set" || action === "show" ? action : null;
+}
+
+async function showTablesDateSelect(
+  interaction: ButtonInteraction,
+  config: AppConfig,
+  action: TablesDateAction
+): Promise<void> {
+  if (!interaction.inGuild()) {
+    await replyEphemeral(interaction, { content: "Commande réservée au serveur." });
+    return;
+  }
+
+  if (!interaction.member || !isAdminMember(interaction.member, config)) {
+    await replyEphemeral(interaction, {
+      content: "⛔ Cette commande est réservée aux administrateurs."
+    });
+    return;
+  }
+
+  const payload = await buildTablesDateSelectPayload(config, action);
+  await replyEphemeral(interaction, payload);
+}
+
+async function buildTablesDateSelectPayload(
+  config: AppConfig,
+  action: TablesDateAction
+): Promise<ReplyPayload> {
+  const events = await listSelectableTableEvents(config);
+  const actionLabel = action === "set" ? "définir" : "voir";
+
+  if (events.length === 0) {
+    return {
+      content: [
+        "**Jeux & tables**",
+        "Aucun créneau créé pour le moment.",
+        "Génère d'abord les créneaux depuis le menu “Créneaux”."
+      ].join("\n"),
+      components: [buildBackToConfigRow()]
+    };
+  }
+
+  return {
+    content: ["**Jeux & tables**", `Choisis le créneau pour ${actionLabel} les tables.`].join("\n"),
+    components: [buildTablesDateSelectRow(config, action, events), buildBackToConfigRow()]
+  };
+}
+
+async function listSelectableTableEvents(config: AppConfig): Promise<Event[]> {
+  const lowerBound = dayjs().tz(config.timezone).startOf("day").subtract(1, "month");
+  const prisma = getPrisma();
+
+  const recentOrUpcoming = await prisma.event.findMany({
+    where: { date: { gte: lowerBound.toDate() } },
+    orderBy: { date: "asc" },
+    take: 25
+  });
+
+  if (recentOrUpcoming.length > 0) {
+    return recentOrUpcoming;
+  }
+
+  const latestPast = await prisma.event.findMany({
+    orderBy: { date: "desc" },
+    take: 25
+  });
+
+  return latestPast.reverse();
+}
+
+function buildTablesDateSelectRow(
+  config: AppConfig,
+  action: TablesDateAction,
+  events: Event[]
+): ReplyComponentRow {
+  return {
+    type: 1,
+    components: [
+      {
+        type: 3,
+        custom_id: `mu_tables:date_select:${action}`,
+        placeholder: "Choisir un créneau",
+        min_values: 1,
+        max_values: 1,
+        options: events.map((event) => {
+          const date = dayjs(event.date).tz(config.timezone);
+          const status = event.status === "OUVERT" ? "Ouvert" : "Fermé";
+
+          return {
+            label: formatFrenchDate(date).slice(0, 100),
+            value: formatTableDateKey(date),
+            description: `${status} · ${formatTableCount(event.tables)}`.slice(0, 100)
+          };
+        })
+      }
+    ]
+  } as ReplyComponentRow;
+}
+
 async function buildTablesGameConfigPayload(
   config: AppConfig,
   parsedDate: dayjs.Dayjs,
@@ -1530,7 +1656,7 @@ async function buildTablesGameConfigPayload(
         "**Définir les tables par jeu**",
         `Date : ${formatFrenchDate(parsedDate)}`,
         "",
-        "Aucun jeu actif configuré. Ajoute d'abord un jeu dans “Jeux & canaux”."
+        "Aucun jeu actif configuré. Ajoute d'abord un jeu dans “Jeux & tables”."
       ].join("\n"),
       components: [buildBackToConfigRow()]
     };
@@ -1899,43 +2025,50 @@ async function handleTablesShow(
   }
 
   await replyEphemeral(interaction, { content: "⏳ Traitement en cours..." });
+  const payload = await buildTablesShowPayload(config, logger, parsedDate);
+  await interaction.editReply(toEditPayload(payload));
+}
 
+async function buildTablesShowPayload(
+  config: AppConfig,
+  logger: Logger,
+  parsedDate: dayjs.Dayjs
+): Promise<ReplyPayload> {
   const closure = await getClosureInfo(parsedDate, config.vacationAcademy, config.timezone, logger);
   const eventDate = parsedDate.toDate();
   const prisma = getPrisma();
   const slotDays = await getSlotDays(prisma);
 
   if (!isSlotDay(parsedDate, slotDays)) {
-    await interaction.editReply({
+    return {
       content: `❌ La date ne correspond pas à un jour de créneau. Jours actifs : ${formatSlotDays(
         slotDays
       )}.`,
       components: [buildBackToConfigRow()]
-    });
-    return;
+    };
   }
+
   const event = await prisma.event.findUnique({ where: { date: eventDate } });
   const closureText = closure.closed
     ? `⚠️ ${closure.reason ?? "Fermeture"} (${closure.period?.description ?? "Vacances"})`
     : "✅ Ouvert";
 
   if (!event) {
-    await interaction.editReply({
+    return {
       content: [
         `📅 ${formatFrenchDate(parsedDate)}`,
         "Créneau: ❌ Non créé",
         `Statut: ${closureText}`
       ].join("\n"),
       components: [buildTablesRow(), buildBackToConfigRow()]
-    });
-    return;
+    };
   }
 
   const statusText =
     event.status === "FERME" ? (event.isVacation ? closureText : "⚠️ Fermé (annulé)") : "✅ Ouvert";
   const capacity = await getEventTableCapacity(prisma, event);
 
-  await interaction.editReply({
+  return {
     content: [
       `📅 ${formatFrenchDate(parsedDate)}`,
       `Tables: ${formatTableCount(capacity.totalTables)}`,
@@ -1943,7 +2076,7 @@ async function handleTablesShow(
       `Statut: ${statusText}`
     ].join("\n"),
     components: [buildTablesRow(), buildBackToConfigRow()]
-  });
+  };
 }
 
 type ThreadAdminContext = {
@@ -2859,13 +2992,13 @@ function buildTablesRow() {
       {
         type: 2,
         custom_id: "mu_tables:set",
-        label: "Définir les tables",
+        label: "Définir une soirée",
         style: ButtonStyle.Primary
       },
       {
         type: 2,
         custom_id: "mu_tables:show",
-        label: "Voir les tables",
+        label: "Voir une soirée",
         style: ButtonStyle.Secondary
       }
     ]
@@ -2920,14 +3053,13 @@ function buildBackToHomeRow(): ReplyComponentRow {
   } as ReplyComponentRow;
 }
 
-type ConfigCategory = "home" | "slots" | "games" | "matches" | "tables" | "automations";
+type ConfigCategory = "home" | "slots" | "games" | "matches" | "automations";
 
 const CONFIG_CATEGORIES: { value: ConfigCategory; label: string; description: string }[] = [
   { value: "home", label: "Accueil", description: "Vue d'ensemble" },
   { value: "slots", label: "Créneaux", description: "Gérer les créneaux" },
-  { value: "games", label: "Jeux", description: "Gérer jeux & canaux" },
+  { value: "games", label: "Jeux & tables", description: "Gérer jeux, canaux et tables" },
   { value: "matches", label: "Parties", description: "Gérer les parties" },
-  { value: "tables", label: "Tables", description: "Gérer les tables" },
   { value: "automations", label: "Automatisations", description: "Planifier les actions" }
 ];
 
@@ -3036,6 +3168,23 @@ function buildGamesCategoryRows() {
         }
       ]
     },
+    {
+      type: 1,
+      components: [
+        {
+          type: 2,
+          custom_id: "mu_tables:set",
+          label: "Définir les tables d'une soirée",
+          style: ButtonStyle.Primary
+        },
+        {
+          type: 2,
+          custom_id: "mu_tables:show",
+          label: "Voir les tables d'une soirée",
+          style: ButtonStyle.Secondary
+        }
+      ]
+    },
     buildBackToHomeRow()
   ];
 }
@@ -3072,28 +3221,6 @@ function buildMatchesCategoryRows() {
           type: 2,
           custom_id: "mu_match:cancel_request",
           label: "Annuler",
-          style: ButtonStyle.Secondary
-        }
-      ]
-    }
-  ];
-}
-
-function buildTablesCategoryRows() {
-  return [
-    {
-      type: 1,
-      components: [
-        {
-          type: 2,
-          custom_id: "mu_tables:set",
-          label: "Définir",
-          style: ButtonStyle.Primary
-        },
-        {
-          type: 2,
-          custom_id: "mu_tables:show",
-          label: "Voir",
           style: ButtonStyle.Secondary
         }
       ]
@@ -3303,7 +3430,7 @@ async function buildGamesConfigPayload(state: GameConfigState): Promise<ReplyPay
   if (orderedGames.length === 0) {
     return {
       content: [
-        "**Jeux & canaux**",
+        "**Jeux & tables**",
         state.notice,
         "Aucun jeu configuré pour le moment.",
         "Ajoute un jeu et associe-lui un canal."
@@ -3322,7 +3449,7 @@ async function buildGamesConfigPayload(state: GameConfigState): Promise<ReplyPay
 
   return {
     content: [
-      "**Jeux & canaux**",
+      "**Jeux & tables**",
       "Sélectionne un jeu puis le canal où créer les fils de discussion.",
       "Chaque jeu doit avoir un canal associé.",
       state.notice,
@@ -3496,9 +3623,8 @@ async function buildConfigCategoryResponse(
 
     return {
       content: [
-        buildConfigCategoryContent("**Jeux & canaux**"),
-        "Associez chaque jeu au canal où créer ses fils de discussion.",
-        "Les tables par défaut servent à préremplir les nouveaux créneaux.",
+        buildConfigCategoryContent("**Jeux & tables**"),
+        "Associez chaque jeu à son canal de fils, réglez ses tables par défaut, puis ajustez les tables des soirées créées.",
         "",
         `Jeux configurés (${orderedGames.length}) :`,
         gameLines
@@ -3511,17 +3637,6 @@ async function buildConfigCategoryResponse(
     return {
       content: buildConfigCategoryContent("**Parties**"),
       components: [buildConfigMenuSelect("matches"), ...buildMatchesCategoryRows()]
-    };
-  }
-
-  if (category === "tables") {
-    return {
-      content: [
-        buildConfigCategoryContent("**Tables**"),
-        "Définissez les tables par jeu pour une soirée.",
-        "Les valeurs par défaut se configurent dans “Jeux”."
-      ].join("\n"),
-      components: [buildConfigMenuSelect("tables"), ...buildTablesCategoryRows()]
     };
   }
 
@@ -4539,84 +4654,6 @@ async function showMatchActionModal(
   if (!requiresReason) {
     modal.components.pop();
   }
-
-  await interaction.showModal(modal as ModalPayload);
-}
-
-async function showTablesSetModal(
-  interaction: ButtonInteraction,
-  config: AppConfig
-): Promise<void> {
-  if (!interaction.inGuild()) {
-    await replyEphemeral(interaction, { content: "Commande réservée au serveur." });
-    return;
-  }
-
-  if (!interaction.member || !isAdminMember(interaction.member, config)) {
-    await replyEphemeral(interaction, {
-      content: "⛔ Cette commande est réservée aux administrateurs."
-    });
-    return;
-  }
-
-  const modal = {
-    custom_id: "mu_tables:set_modal",
-    title: "Définir les tables par jeu",
-    components: [
-      {
-        type: 1,
-        components: [
-          {
-            type: 4,
-            custom_id: "date",
-            label: "Date (JJ/MM/AAAA)",
-            style: TextInputStyle.Short,
-            required: true,
-            placeholder: "28/02/2026"
-          }
-        ]
-      }
-    ]
-  };
-
-  await interaction.showModal(modal as ModalPayload);
-}
-
-async function showTablesShowModal(
-  interaction: ButtonInteraction,
-  config: AppConfig
-): Promise<void> {
-  if (!interaction.inGuild()) {
-    await replyEphemeral(interaction, { content: "Commande réservée au serveur." });
-    return;
-  }
-
-  if (!interaction.member || !isAdminMember(interaction.member, config)) {
-    await replyEphemeral(interaction, {
-      content: "⛔ Cette commande est réservée aux administrateurs."
-    });
-    return;
-  }
-
-  const modal = {
-    custom_id: "mu_tables:show_modal",
-    title: "Voir les tables",
-    components: [
-      {
-        type: 1,
-        components: [
-          {
-            type: 4,
-            custom_id: "date",
-            label: "Date (JJ/MM/AAAA)",
-            style: TextInputStyle.Short,
-            required: true,
-            placeholder: "28/02/2026"
-          }
-        ]
-      }
-    ]
-  };
 
   await interaction.showModal(modal as ModalPayload);
 }

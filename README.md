@@ -12,7 +12,7 @@ Munitorum is a Discord bot for tabletop reservations (Warhammer 40k / AoS / Kill
 - Thread-level admin controls for per-game tables and possible match validation
 - Dynamic game list with per-game thread channel mapping
 - Match submissions + validation/refusal/cancellation (buttons + `/mu_match`)
-- Config menu with category selector (créneaux / parties / tables)
+- Config menu with category selector (créneaux / jeux & tables / parties / automatisations)
 - Automatic monthly slot generation on the first Sunday of the month
 - PostgreSQL persistence + backups (planned)
 
@@ -140,7 +140,7 @@ Enable the following **Privileged Gateway Intents** in the Discord Developer Por
 - `/mu_games disable <game>` — disable a game
 - `/mu_games enable <game>` — enable a game
 
-The `/mu_config` menu starts on “Accueil” with a language selector and a table of recorded slots. A base settings reminder appears as a quote block. Admins can configure slot days (multiple weekdays), manage games + channels, per-game default table counts, automation timing, and use category buttons for slots, games, matches, and tables. The Tables category lets admins choose a date, select a game from a dropdown, and set that game's table count. Defaults can be applied in one click from the values configured on active games. New games created from the menu default to `DISCORD_CHANNEL_ID` until reassigned; W40K and AoS are prefilled with 5 and 2 tables respectively when detected.
+The `/mu_config` menu starts on “Accueil” with a language selector and a table of recorded slots. A base settings reminder appears as a quote block. Admins can configure slot days (multiple weekdays), manage games + channels, per-game default table counts, automation timing, and use category buttons for slots, games + tables, and matches. The `Jeux & tables` category lets admins pick an existing slot date from a dropdown, select a game, and set that game's table count. Defaults can be applied in one click from the values configured on active games. New games created from the menu default to `DISCORD_CHANNEL_ID` until reassigned; W40K and AoS are prefilled with 5 and 2 tables respectively when detected.
 
 Each generated game thread also includes admin-only buttons:
 
@@ -170,9 +170,9 @@ Default automation values:
 
 All core actions have both a slash command and a button/modals path:
 
-- Tables + slots: `/mu_tables`, `/mu_slots` or their buttons/modals
+- Tables + slots: `/mu_tables`, `/mu_slots` or their buttons/dropdowns/modals
 - Slot days: `/mu_slots set_days` or the config modal
-- Games + channels: `/mu_games ...` or the `Jeux` config category
+- Games + channels + table defaults: `/mu_games ...` or the `Jeux & tables` config category
 - Match creation: `/mu_match create` or match panel button (modal)
 - Match validate/refuse/cancel: `/mu_match validate|refuse|cancel` or match buttons
 
