@@ -53,7 +53,7 @@ export async function generateCurrentMonthSlots(
   for (const slotDate of slots) {
     const existing = await prisma.event.findUnique({ where: { date: slotDate.toDate() } });
     if (existing) {
-      if (existing.status === "OUVERT") {
+      if (existing.status === "OUVERT" && existing.tables > 0) {
         const threads = await ensureEventThreads(client, config, logger, existing);
         result.threadsCreated += threads.created;
         result.threadsExisting += threads.existing;
@@ -69,7 +69,7 @@ export async function generateCurrentMonthSlots(
       continue;
     }
 
-    const event = await prisma.event.create({
+    await prisma.event.create({
       data: {
         date: slotDate.toDate(),
         tables: 0,
@@ -78,10 +78,6 @@ export async function generateCurrentMonthSlots(
       }
     });
 
-    const threads = await ensureEventThreads(client, config, logger, event);
-    result.threadsCreated += threads.created;
-    result.threadsExisting += threads.existing;
-    result.threadsFailed += threads.failed;
     result.created += 1;
   }
 

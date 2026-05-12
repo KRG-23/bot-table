@@ -7,8 +7,8 @@ Munitorum is a Discord bot for tabletop reservations (Warhammer 40k / AoS / Kill
 ## Features (current / planned)
 
 - Slash commands: `/mu_health`, `/mu_config`, `/mu_tables set|show`, `/mu_slots generate|set_days|delete_date|delete_month`, `/mu_match ...`, `/mu_games ...`
-- Table capacity management
-- Auto thread creation per game when a slot is created (and cleanup on cancellation)
+- Table capacity management per game
+- Auto thread creation per game when a slot is opened with tables (and cleanup on cancellation)
 - Dynamic game list with per-game thread channel mapping
 - Match submissions + validation/refusal/cancellation (buttons + `/mu_match`)
 - Config menu with category selector (créneaux / parties / tables)
@@ -121,8 +121,8 @@ Enable the following **Privileged Gateway Intents** in the Discord Developer Por
 
 - `/mu_health` — check bot status
 - `/mu_config` — open the public configuration menu (expires 60s after the last interaction, then replaced with a timeout message)
-- `/mu_tables set <date> <count>` — set tables for a Friday (date format `DD/MM/YYYY`)
-- `/mu_tables show <date>` — show tables for a Friday
+- `/mu_tables set <date> <count> [game]` — set tables for a Friday, globally or for one game (date format `DD/MM/YYYY`)
+- `/mu_tables show <date>` — show tables for a Friday, including per-game allocation when configured
 - `/mu_slots generate` — create missing Friday slots for the current month
 - `/mu_slots set_days <days>` — configure slot weekdays (ex: `ven` or `1,3,5`)
 - `/mu_slots delete_date <date>` — delete a slot and related matches for a specific date
@@ -138,19 +138,19 @@ Enable the following **Privileged Gateway Intents** in the Discord Developer Por
 - `/mu_games disable <game>` — disable a game
 - `/mu_games enable <game>` — enable a game
 
-The `/mu_config` menu starts on “Accueil” with a language selector and a table of recorded slots. A base settings reminder appears as a quote block. Admins can configure slot days (multiple weekdays), manage games + channels, automation timing, and use category buttons for slots, games, matches, and tables. New games created from the menu default to `DISCORD_CHANNEL_ID` until reassigned.
+The `/mu_config` menu starts on “Accueil” with a language selector and a table of recorded slots. A base settings reminder appears as a quote block. Admins can configure slot days (multiple weekdays), manage games + channels, automation timing, and use category buttons for slots, games, matches, and tables. The Tables category accepts per-game allocation such as `W40K=5, AoS=2`. New games created from the menu default to `DISCORD_CHANNEL_ID` until reassigned.
 
 ## Automations
 
 When the bot is ready, it schedules the next automation runs in `TZ` (default `Europe/Paris`) without polling continuously. The schedule is configurable from `/mu_config` > “Automatisations”; saved changes refresh the in-memory scheduler.
 
-Monthly slot generation runs by default on the first Sunday of the month at 09:00. It generates the current month's configured slots once, skips school holiday/holiday-eve closures, creates the per-game threads, and posts a summary in `DISCORD_CHANNEL_ID`.
+Monthly slot generation runs by default on the first Sunday of the month at 09:00. It generates the current month's configured slots once, skips school holiday/holiday-eve closures, and posts a summary in `DISCORD_CHANNEL_ID`. Per-game threads are created when the corresponding game has tables configured for the slot.
 
 - existing slots are reused
-- missing per-game threads are recreated
+- missing per-game threads are recreated for open slots with configured tables for that game
 - the last automatic run month is stored in the `monthly_slots_last_auto_run` setting
 
-Weekly match review runs by default every Wednesday at 21:00. It reviews open slots for the configured window (7 days by default), auto-validates pending matches when validated + pending matches fit within available tables, sends player DMs, and posts a recap in `DISCORD_CHANNEL_ID`.
+Weekly match review runs by default every Wednesday at 21:00. It reviews open slots for the configured window (7 days by default), auto-validates pending matches when validated + pending matches fit within the available tables for their game, sends player DMs, and posts a recap in `DISCORD_CHANNEL_ID`.
 
 Default automation values:
 

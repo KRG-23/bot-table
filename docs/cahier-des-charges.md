@@ -17,18 +17,18 @@
 ## 3. Flux hebdomadaire cible
 
 1. **Génération mensuelle (automatique)**
-   - Création ou réactivation d’un fil par jeu au format « Soirée <Jeu> le <date du vendredi> » pour les créneaux du mois. Par défaut, les fils du mois sont créés le **premier dimanche du mois à 09h00**.
+   - Création ou réactivation d’un fil par jeu au format « Soirée <Jeu> le <date du vendredi> » pour les créneaux du mois, uniquement lorsque des tables sont configurées pour ce jeu. Par défaut, les fils du mois sont préparés le **premier dimanche du mois à 09h00**.
    - Le jour, la semaine du mois et l’heure sont paramétrables depuis le menu de configuration.
    - Si le vendredi correspondant est **veille de vacances scolaires de l’académie de Nantes** ou pendant ces vacances, le fil n’est pas créé et aucune partie n’est autorisée.
-   - Un admin saisit le **nombre total de tables** disponibles (incluant la table Billard) via commande.
+   - Un admin saisit le **nombre de tables par jeu** via commande ou menu de configuration, par exemple `W40K=5, AoS=2`.
 
 2. **Dimanche → Mercredi**
    - Les joueurs s’entendent et **notent le bot** dans le fil avec la mention des deux pseudos (ex. `@Bot @Joueur1 vs @Joueur2`), en indiquant le système de jeu.
    - Le bot enregistre la demande en statut `en_attente` et incrémente le compteur de parties.
 
 3. **Récap parties (automatique)**
-   - Rappel aux admins : récap des parties en attente et nombre de tables restantes.
-   - Auto-validation si `nombre_parties <= tables_disponibles` (toutes passent en `valide`).
+   - Rappel aux admins : récap des parties en attente et nombre de tables restantes par jeu.
+   - Auto-validation par jeu si `nombre_parties_du_jeu <= tables_disponibles_du_jeu`.
    - Par défaut, le récap tourne le **mercredi à 21h00** sur une fenêtre de **7 jours** ; ces valeurs sont paramétrables.
 
 4. **Validation manuelle (à tout moment)**
@@ -39,10 +39,10 @@
 
 ## 4. Exigences fonctionnelles
 
-- **Collecte des tables** : commande admin pour saisir/modifier le nombre de tables d’un vendredi (valeur entière). La table Billard n’a pas de traitement spécial autre que d’être comptée.
-- **Création automatique des fils** : un fil par jeu pour chaque vendredi du mois, créé le 1er dimanche du mois ; réutiliser le fil s’il existe déjà.
+- **Collecte des tables** : commande admin pour saisir/modifier le nombre de tables par jeu d’un vendredi. La table Billard n’a pas de traitement spécial autre que d’être comptée dans le jeu choisi.
+- **Création automatique des fils** : un fil par jeu pour chaque vendredi du mois, créé uniquement si ce jeu a au moins une table ; réutiliser le fil s’il existe déjà.
 - **Saisie d’une partie** : message mentionnant le bot + les deux joueurs + le jeu. Le bot répond avec un récap et le statut (`en_attente` ou `valide`).
-- **Validation automatique** : si le total des parties enregistrées ≤ tables, bascule en `valide` sans action admin.
+- **Validation automatique** : si le total des parties enregistrées pour un jeu ≤ tables de ce jeu, bascule en `valide` sans action admin.
 - **Validation manuelle** : commandes admin pour valider/refuser/annuler une partie.
 - **Notifications** :
   - DM aux joueurs validés (par défaut).
@@ -55,7 +55,8 @@
 
 - `users` : id Discord, pseudo, dates de première/dernière interaction.
 - `game_systems` : enum {40k, AoS, KillTeam, Autre}.
-- `events` : date du vendredi, nb_tables, statut (ouvert/fermé), métadonnées vacances.
+- `events` : date du vendredi, nb_tables total, statut (ouvert/fermé), métadonnées vacances.
+- `event_game_capacities` : tables disponibles par jeu pour un créneau.
 - `matches` : event_id, joueur1_id, joueur2_id, jeu, statut {en_attente, valide, refuse, annule}, timestamps, message_id du fil.
 - `notifications` : match_id, type {dm, thread}, date_envoi, succès/erreur.
 

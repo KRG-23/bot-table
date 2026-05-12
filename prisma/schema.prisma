@@ -25,27 +25,28 @@ enum NotificationType {
 }
 
 model User {
-  id             Int      @id @default(autoincrement())
-  discordId      String   @unique
-  displayName    String?
-  firstSeenAt    DateTime @default(now())
-  lastSeenAt     DateTime @default(now())
+  id          Int      @id @default(autoincrement())
+  discordId   String   @unique
+  displayName String?
+  firstSeenAt DateTime @default(now())
+  lastSeenAt  DateTime @default(now())
 
-  matchesPlayer1 Match[]  @relation("Player1Matches")
-  matchesPlayer2 Match[]  @relation("Player2Matches")
+  matchesPlayer1 Match[] @relation("Player1Matches")
+  matchesPlayer2 Match[] @relation("Player2Matches")
 }
 
 model Event {
-  id          Int          @id @default(autoincrement())
-  date        DateTime     @unique
-  tables      Int
-  status      EventStatus  @default(OUVERT)
-  isVacation  Boolean      @default(false)
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  id         Int         @id @default(autoincrement())
+  date       DateTime    @unique
+  tables     Int
+  status     EventStatus @default(OUVERT)
+  isVacation Boolean     @default(false)
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
 
-  matches     Match[]
-  threads     EventThread[]
+  matches        Match[]
+  threads        EventThread[]
+  gameCapacities EventGameCapacity[]
 
   @@index([date])
 }
@@ -59,61 +60,76 @@ model Game {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  matches   Match[]
-  threads   EventThread[]
+  matches         Match[]
+  threads         EventThread[]
+  eventCapacities EventGameCapacity[]
 }
 
 model Match {
-  id          Int          @id @default(autoincrement())
-  event       Event        @relation(fields: [eventId], references: [id])
-  eventId     Int
+  id      Int   @id @default(autoincrement())
+  event   Event @relation(fields: [eventId], references: [id])
+  eventId Int
 
-  player1     User         @relation("Player1Matches", fields: [player1Id], references: [id])
-  player1Id   Int
-  player2     User         @relation("Player2Matches", fields: [player2Id], references: [id])
-  player2Id   Int
+  player1   User @relation("Player1Matches", fields: [player1Id], references: [id])
+  player1Id Int
+  player2   User @relation("Player2Matches", fields: [player2Id], references: [id])
+  player2Id Int
 
-  game        Game         @relation(fields: [gameId], references: [id])
-  gameId      Int
-  status      MatchStatus  @default(EN_ATTENTE)
-  messageId   String?
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  game      Game        @relation(fields: [gameId], references: [id])
+  gameId    Int
+  status    MatchStatus @default(EN_ATTENTE)
+  messageId String?
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
 
   notifications Notification[]
 
-  @@index([eventId])
   @@unique([eventId, player1Id])
   @@unique([eventId, player2Id])
+  @@index([eventId])
 }
 
 model Notification {
-  id        Int              @id @default(autoincrement())
-  match     Match            @relation(fields: [matchId], references: [id])
-  matchId   Int
-  type      NotificationType
-  sentAt    DateTime         @default(now())
-  success   Boolean
-  error     String?
+  id      Int              @id @default(autoincrement())
+  match   Match            @relation(fields: [matchId], references: [id])
+  matchId Int
+  type    NotificationType
+  sentAt  DateTime         @default(now())
+  success Boolean
+  error   String?
 }
 
 model EventThread {
-  id         Int        @id @default(autoincrement())
-  event      Event      @relation(fields: [eventId], references: [id])
-  eventId    Int
-  game       Game       @relation(fields: [gameId], references: [id])
-  gameId     Int
-  threadId   String
-  createdAt  DateTime   @default(now())
+  id        Int      @id @default(autoincrement())
+  event     Event    @relation(fields: [eventId], references: [id])
+  eventId   Int
+  game      Game     @relation(fields: [gameId], references: [id])
+  gameId    Int
+  threadId  String
+  createdAt DateTime @default(now())
 
   @@unique([eventId, gameId])
   @@index([threadId])
 }
 
+model EventGameCapacity {
+  id        Int      @id @default(autoincrement())
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  eventId   Int
+  game      Game     @relation(fields: [gameId], references: [id])
+  gameId    Int
+  tables    Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([eventId, gameId])
+  @@index([gameId])
+}
+
 model Setting {
-  id            Int      @id @default(autoincrement())
-  key           String   @unique
-  value         String
-  updatedAt     DateTime @updatedAt
-  createdAt     DateTime @default(now())
+  id        Int      @id @default(autoincrement())
+  key       String   @unique
+  value     String
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
 }

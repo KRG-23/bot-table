@@ -1,4 +1,4 @@
-import type { Game } from "@prisma/client";
+import type { Event, Game } from "@prisma/client";
 import dayjs from "dayjs";
 import type { Client, InteractionReplyOptions, Message } from "discord.js";
 import type { Logger } from "pino";
@@ -7,7 +7,7 @@ import type { AppConfig } from "../config";
 import { getPrisma } from "../db";
 import { formatFrenchDate } from "../utils/dates";
 
-import { listActiveGames } from "./games";
+import { listGamesWithConfiguredTables } from "./table-capacity";
 
 const FRENCH_MONTHS = [
   "janvier",
@@ -72,7 +72,8 @@ function buildThreadGuideMessage(game: Game, date: dayjs.Dayjs, botName: string)
     "",
     "**Règles utiles**",
     "• Une seule partie par joueur pour la soirée.",
-    "• Les réservations sont bloquées si le créneau est fermé ou sans table.",
+    "• Les réservations ouvrent quand les tables sont configurées.",
+    "• Les réservations sont bloquées si le créneau est fermé.",
     "• Les admins gèrent les tables, les jeux et les annulations depuis `/mu_config`."
   ].join("\n");
 }
@@ -99,18 +100,23 @@ export async function ensureEventThreads(
   client: Client,
   config: AppConfig,
   logger: Logger,
-  event: { id: number; date: Date }
+  event: Pick<Event, "id" | "date" | "status" | "tables">
 ): Promise<EventThreadResult> {
-  const prisma = getPrisma();
-  const existing = await prisma.eventThread.findMany({ where: { eventId: event.id } });
-  const existingGames = new Set(existing.map((thread) => thread.gameId));
-  const eventDate = dayjs(event.date).tz(config.timezone);
-  const games = await listActiveGames(prisma);
   const result: EventThreadResult = {
     created: 0,
     existing: 0,
     failed: 0
   };
+
+  if (event.status !== "OUVERT" || event.tables <= 0) {
+    return result;
+  }
+
+  const prisma = getPrisma();
+  const existing = await prisma.eventThread.findMany({ where: { eventId: event.id } });
+  const existingGames = new Set(existing.map((thread) => thread.gameId));
+  const eventDate = dayjs(event.date).tz(config.timezone);
+  const games = await listGamesWithConfiguredTables(prisma, event);
 
   for (const game of games) {
     if (existingGames.has(game.id)) {
@@ -196,6 +202,42 @@ export async function closeEventThreads(
   }
 
   await prisma.eventThread.deleteMany({ where: { eventId } });
+  await closeThreadsByIds(
+    client,
+    logger,
+    threads.map((thread) => thread.threadId)
+  );
+}
+
+export async function closeEventThreadsForGames(
+  client: Client,
+  logger: Logger,
+  eventId: number,
+  gameIds: number[]
+): Promise<void> {
+  if (gameIds.length === 0) {
+    return;
+  }
+
+  const prisma = getPrisma();
+  const threads = await prisma.eventThread.findMany({
+    where: {
+      eventId,
+      gameId: { in: gameIds }
+    },
+    select: { threadId: true }
+  });
+
+  if (threads.length === 0) {
+    return;
+  }
+
+  await prisma.eventThread.deleteMany({
+    where: {
+      eventId,
+      gameId: { in: gameIds }
+    }
+  });
   await closeThreadsByIds(
     client,
     logger,

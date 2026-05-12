@@ -7,6 +7,8 @@ import type { AppConfig } from "../config";
 import { getPrisma } from "../db";
 import { formatFrenchDate } from "../utils/dates";
 
+import { getEventTableCapacity, getGameTableCapacity } from "./table-capacity";
+
 type ReplyComponents = InteractionReplyOptions["components"];
 
 type SendableChannel = {
@@ -112,38 +114,59 @@ export async function reviewUpcomingMatches(
   };
 
   for (const event of events) {
-    const validated = event.matches.filter((match) => match.status === MatchStatus.VALIDE);
-    const pending = event.matches.filter((match) => match.status === MatchStatus.EN_ATTENTE);
-    const activeCount = validated.length + pending.length;
-    const remainingBeforeReview = Math.max(event.tables - validated.length, 0);
-
-    if (pending.length > 0 && activeCount <= event.tables) {
-      await prisma.match.updateMany({
-        where: { id: { in: pending.map((match) => match.id) } },
-        data: { status: MatchStatus.VALIDE }
-      });
-
-      await Promise.all(
-        pending.map((match) => notifyAutoValidatedMatch(client, config, logger, match))
-      );
-
-      result.autoValidated += pending.length;
+    if (event.matches.length === 0) {
+      const capacity = await getEventTableCapacity(prisma, event);
       result.lines.push(
-        `• ${formatFrenchDate(dayjs(event.date).tz(config.timezone))} : ${pending.length} partie(s) auto-validée(s), ${event.tables - activeCount} table(s) restante(s).`
+        `• ${formatFrenchDate(
+          dayjs(event.date).tz(config.timezone)
+        )} : aucune partie en attente, ${capacity.totalTables} table(s) restante(s).`
       );
       continue;
     }
 
-    result.pendingAfterReview += pending.length;
+    const gameIds = [...new Set(event.matches.map((match) => match.gameId))];
 
-    if (pending.length > 0) {
-      result.lines.push(
-        `• ${formatFrenchDate(dayjs(event.date).tz(config.timezone))} : ${pending.length} partie(s) en attente, ${remainingBeforeReview} table(s) restante(s). Action admin requise.`
-      );
-    } else {
-      result.lines.push(
-        `• ${formatFrenchDate(dayjs(event.date).tz(config.timezone))} : aucune partie en attente, ${remainingBeforeReview} table(s) restante(s).`
-      );
+    for (const gameId of gameIds) {
+      const gameMatches = event.matches.filter((match) => match.gameId === gameId);
+      const gameLabel = gameMatches[0]?.game.label ?? "Jeu";
+      const gameCapacity = await getGameTableCapacity(prisma, event, gameId);
+      const validated = gameMatches.filter((match) => match.status === MatchStatus.VALIDE);
+      const pending = gameMatches.filter((match) => match.status === MatchStatus.EN_ATTENTE);
+      const activeCount = validated.length + pending.length;
+      const remainingBeforeReview = Math.max(gameCapacity - validated.length, 0);
+
+      if (pending.length > 0 && activeCount <= gameCapacity) {
+        await prisma.match.updateMany({
+          where: { id: { in: pending.map((match) => match.id) } },
+          data: { status: MatchStatus.VALIDE }
+        });
+
+        await Promise.all(
+          pending.map((match) => notifyAutoValidatedMatch(client, config, logger, match))
+        );
+
+        result.autoValidated += pending.length;
+        result.lines.push(
+          `• ${formatFrenchDate(dayjs(event.date).tz(config.timezone))} — ${gameLabel} : ${
+            pending.length
+          } partie(s) auto-validée(s), ${gameCapacity - activeCount} table(s) restante(s).`
+        );
+        continue;
+      }
+
+      result.pendingAfterReview += pending.length;
+
+      if (pending.length > 0) {
+        result.lines.push(
+          `• ${formatFrenchDate(dayjs(event.date).tz(config.timezone))} — ${gameLabel} : ${
+            pending.length
+          } partie(s) en attente, ${remainingBeforeReview} table(s) restante(s). Action admin requise.`
+        );
+      } else {
+        result.lines.push(
+          `• ${formatFrenchDate(dayjs(event.date).tz(config.timezone))} — ${gameLabel} : aucune partie en attente, ${remainingBeforeReview} table(s) restante(s).`
+        );
+      }
     }
   }
 

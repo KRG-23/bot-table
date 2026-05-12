@@ -31,6 +31,7 @@ import {
 } from "../services/automation-settings";
 import {
   closeEventThreads,
+  closeEventThreadsForGames,
   closeThreadsByIds,
   ensureEventThreads
 } from "../services/event-threads";
@@ -53,6 +54,16 @@ import {
   isSlotDay,
   parseSlotDaysInput
 } from "../services/slots";
+import {
+  formatGameTableCapacities,
+  formatTableCount,
+  getEventTableCapacity,
+  getGameTableCapacity,
+  parseGameTableAllocations,
+  recalculateEventTables,
+  replaceGameTableCapacities,
+  upsertGameTableCapacity
+} from "../services/table-capacity";
 import { getClosureInfo } from "../services/vacations";
 import { formatFrenchDate, parseFrenchDate } from "../utils/dates";
 
@@ -80,6 +91,9 @@ type ReplyPayload = {
   content: string;
   components?: ReplyComponents;
 };
+type ParsedGameTableAllocations = Awaited<
+  ReturnType<typeof parseGameTableAllocations>
+>["allocations"];
 
 type ChannelLike = {
   id: string;
@@ -147,7 +161,12 @@ export async function handleInteraction(
 
     if (subcommand === "set") {
       const count = interaction.options.getInteger("count", true);
-      await handleTablesSet(interaction, config, logger, parsedDate, count);
+      const gameInput = interaction.options.getString("game");
+      if (gameInput) {
+        await handleGameTablesSet(interaction, config, logger, parsedDate, gameInput, count);
+      } else {
+        await handleTablesSet(interaction, config, logger, parsedDate, count);
+      }
       return;
     }
 
@@ -682,9 +701,8 @@ export async function handleModalSubmit(
     }
 
     const dateInput = interaction.fields.getTextInputValue("date");
-    const countInput = interaction.fields.getTextInputValue("count");
+    const allocationInput = interaction.fields.getTextInputValue("allocations");
     const parsedDate = parseFrenchDate(dateInput, config.timezone);
-    const count = Number(countInput);
 
     if (!parsedDate) {
       await replyEphemeral(interaction, {
@@ -693,12 +711,7 @@ export async function handleModalSubmit(
       return;
     }
 
-    if (!Number.isInteger(count) || count < 0) {
-      await replyEphemeral(interaction, { content: "❌ Nombre de tables invalide." });
-      return;
-    }
-
-    await handleTablesSet(interaction, config, logger, parsedDate, count);
+    await handleGameTablesSetFromInput(interaction, config, logger, parsedDate, allocationInput);
     return;
   }
 
@@ -1270,6 +1283,7 @@ async function handleTablesSet(
       isVacation: closure.closed
     }
   });
+  await replaceGameTableCapacities(prisma, event.id, []);
 
   const closureText = closure.closed
     ? `⚠️ ${closure.reason ?? "Fermeture"} (${closure.period?.description ?? "Vacances"})`
@@ -1291,6 +1305,164 @@ async function handleTablesSet(
   } else {
     await ensureEventThreads(interaction.client, config, logger, event);
   }
+}
+
+async function handleGameTablesSetFromInput(
+  interaction: EphemeralInteraction,
+  config: AppConfig,
+  logger: Logger,
+  parsedDate: ReturnType<typeof parseFrenchDate>,
+  allocationInput: string
+): Promise<void> {
+  if (!parsedDate) {
+    return;
+  }
+
+  const prisma = getPrisma();
+  const { allocations, errors } = await parseGameTableAllocations(prisma, allocationInput);
+
+  if (errors.length > 0) {
+    await replyEphemeral(interaction, {
+      content: [`❌ Répartition invalide.`, ...errors].join("\n")
+    });
+    return;
+  }
+
+  await handleGameTablesSet(interaction, config, logger, parsedDate, allocations);
+}
+
+async function handleGameTablesSet(
+  interaction: EphemeralInteraction,
+  config: AppConfig,
+  logger: Logger,
+  parsedDate: ReturnType<typeof parseFrenchDate>,
+  gameOrAllocations: string | ParsedGameTableAllocations,
+  count?: number
+): Promise<void> {
+  if (!parsedDate) {
+    return;
+  }
+
+  const prisma = getPrisma();
+  let allocations: ParsedGameTableAllocations;
+
+  if (typeof gameOrAllocations === "string") {
+    const tableCount = count;
+    if (tableCount === undefined || !Number.isInteger(tableCount) || tableCount < 0) {
+      await replyEphemeral(interaction, { content: "❌ Nombre de tables invalide." });
+      return;
+    }
+
+    const game = await resolveGameFromInput(prisma, gameOrAllocations);
+    if (!game) {
+      const games = await listActiveGames(prisma);
+      const gameList = games.length ? games.map((item) => item.label).join(", ") : "Aucun";
+      await replyEphemeral(interaction, {
+        content: `❌ Jeu invalide. Jeux disponibles : ${gameList}.`
+      });
+      return;
+    }
+
+    allocations = [{ game, tables: tableCount }];
+  } else {
+    allocations = gameOrAllocations;
+  }
+
+  await replyEphemeral(interaction, { content: "⏳ Traitement en cours..." });
+
+  const closure = await getClosureInfo(parsedDate, config.vacationAcademy, config.timezone, logger);
+  const eventDate = parsedDate.toDate();
+  const slotDays = await getSlotDays(prisma);
+
+  if (!isSlotDay(parsedDate, slotDays)) {
+    await interaction.editReply({
+      content: `❌ La date ne correspond pas à un jour de créneau. Jours actifs : ${formatSlotDays(
+        slotDays
+      )}.`,
+      components: [buildBackToConfigRow()]
+    });
+    return;
+  }
+
+  const event = await prisma.event.upsert({
+    where: { date: eventDate },
+    create: {
+      date: eventDate,
+      tables: 0,
+      status: "FERME",
+      isVacation: closure.closed
+    },
+    update: {
+      isVacation: closure.closed
+    }
+  });
+
+  let removedGameIds: number[] = [];
+
+  if (typeof gameOrAllocations === "string") {
+    const allocation = allocations[0];
+    if (!allocation) {
+      await interaction.editReply({ content: "❌ Répartition invalide." });
+      return;
+    }
+    if (allocation.tables <= 0) {
+      removedGameIds = [allocation.game.id];
+    }
+
+    await upsertGameTableCapacity(prisma, event.id, allocation.game.id, allocation.tables);
+  } else {
+    const previousCapacities = await prisma.eventGameCapacity.findMany({
+      where: { eventId: event.id },
+      select: { gameId: true }
+    });
+    const configuredGameIds = new Set(
+      allocations
+        .filter((allocation) => allocation.tables > 0)
+        .map((allocation) => allocation.game.id)
+    );
+    removedGameIds = previousCapacities
+      .filter((capacity) => !configuredGameIds.has(capacity.gameId))
+      .map((capacity) => capacity.gameId);
+
+    await replaceGameTableCapacities(prisma, event.id, allocations);
+  }
+
+  const totalTables = await recalculateEventTables(prisma, event.id);
+  const isClosed = closure.closed || totalTables <= 0;
+  const updatedEvent = await prisma.event.update({
+    where: { id: event.id },
+    data: {
+      tables: isClosed ? 0 : totalTables,
+      status: isClosed ? "FERME" : "OUVERT",
+      isVacation: closure.closed
+    }
+  });
+
+  const capacity = await getEventTableCapacity(prisma, updatedEvent);
+  const closureText = closure.closed
+    ? `⚠️ ${closure.reason ?? "Fermeture"} (${closure.period?.description ?? "Vacances"})`
+    : isClosed
+      ? "⚠️ Fermé (aucune table configurée)"
+      : "✅ Ouvert";
+
+  if (isClosed) {
+    await closeEventThreads(interaction.client, logger, updatedEvent.id);
+  } else {
+    if (removedGameIds.length > 0) {
+      await closeEventThreadsForGames(interaction.client, logger, updatedEvent.id, removedGameIds);
+    }
+    await ensureEventThreads(interaction.client, config, logger, updatedEvent);
+  }
+
+  await interaction.editReply({
+    content: [
+      `📅 ${formatFrenchDate(parsedDate)}`,
+      `Tables: ${formatTableCount(capacity.totalTables)}`,
+      formatGameTableCapacities(capacity),
+      `Statut: ${closureText}`
+    ].join("\n"),
+    components: [buildTablesRow(), buildBackToConfigRow()]
+  });
 }
 
 async function handleTablesShow(
@@ -1338,11 +1510,13 @@ async function handleTablesShow(
 
   const statusText =
     event.status === "FERME" ? (event.isVacation ? closureText : "⚠️ Fermé (annulé)") : "✅ Ouvert";
+  const capacity = await getEventTableCapacity(prisma, event);
 
   await interaction.editReply({
     content: [
       `📅 ${formatFrenchDate(parsedDate)}`,
-      `Tables: ${event.tables}`,
+      `Tables: ${formatTableCount(capacity.totalTables)}`,
+      formatGameTableCapacities(capacity),
       `Statut: ${statusText}`
     ].join("\n"),
     components: [buildTablesRow(), buildBackToConfigRow()]
@@ -1734,9 +1908,25 @@ async function handleMatchCreate(
     return;
   }
 
-  if (event.status === "FERME" || event.tables <= 0) {
+  if (event.status === "FERME") {
     await interaction.editReply({
       content: "⛔ Soirée fermée : les réservations sont impossibles."
+    });
+    return;
+  }
+
+  if (event.tables <= 0) {
+    await interaction.editReply({
+      content:
+        "⏳ Les tables ne sont pas encore configurées pour cette soirée. Les réservations ouvriront dès qu'un admin aura défini les tables."
+    });
+    return;
+  }
+
+  const gameCapacity = await getGameTableCapacity(prisma, event, game.id);
+  if (gameCapacity <= 0) {
+    await interaction.editReply({
+      content: `⏳ Aucune table n'est configurée pour ${game.label} sur cette soirée.`
     });
     return;
   }
@@ -2575,7 +2765,11 @@ async function buildConfigCategoryResponse(
 
   if (category === "tables") {
     return {
-      content: buildConfigCategoryContent("**Tables**"),
+      content: [
+        buildConfigCategoryContent("**Tables**"),
+        "Définissez les tables par jeu pour une soirée.",
+        "Format attendu : `W40K=5, AoS=2`."
+      ].join("\n"),
       components: [buildConfigMenuSelect("tables"), ...buildTablesCategoryRows()]
     };
   }
@@ -2611,15 +2805,21 @@ async function buildRegisteredSlotsTable(config: AppConfig): Promise<string> {
     return "Aucun créneau enregistré.";
   }
 
-  return events
-    .map((event) => {
+  const lines = await Promise.all(
+    events.map(async (event) => {
       const date = dayjs(event.date).tz(config.timezone);
-      return `• ${formatFrenchDate(date)} — ${formatEventStatus(event)}`;
+      const capacity = await getEventTableCapacity(prisma, event);
+      return `• ${formatFrenchDate(date)} — ${formatEventStatus(event, capacity)}`;
     })
-    .join("\n");
+  );
+
+  return lines.join("\n");
 }
 
-function formatEventStatus(event: { status: string; tables: number; isVacation: boolean }): string {
+function formatEventStatus(
+  event: { status: string; tables: number; isVacation: boolean },
+  capacity?: Awaited<ReturnType<typeof getEventTableCapacity>>
+): string {
   if (event.status === "FERME") {
     return event.isVacation ? "💀 Fermé (vacances)" : "🔴 Fermé";
   }
@@ -2628,15 +2828,11 @@ function formatEventStatus(event: { status: string; tables: number; isVacation: 
     return "🟡 À configurer — aucune table";
   }
 
-  return `🟢 Disponible — ${formatTableCount(event.tables)}`;
-}
+  const allocation = capacity?.usesGameCapacities
+    ? ` — ${capacity.gameTables.map((entry) => `${entry.game.label}: ${entry.tables}`).join(", ")}`
+    : "";
 
-function formatTableCount(tables: number): string {
-  if (tables <= 1) {
-    return `${tables} table`;
-  }
-
-  return `${tables} tables`;
+  return `🟢 Disponible — ${formatTableCount(event.tables)}${allocation}`;
 }
 
 async function buildMonthSlotsOverview(
@@ -2780,6 +2976,21 @@ async function performMatchValidate(
   if (match.status !== MatchStatus.EN_ATTENTE) {
     await interaction.editReply({
       content: `ℹ️ Cette partie est déjà ${match.status.toLowerCase()}.`
+    });
+    return;
+  }
+
+  const gameCapacity = await getGameTableCapacity(prisma, match.event, match.gameId);
+  const validatedCount = await prisma.match.count({
+    where: {
+      eventId: match.eventId,
+      gameId: match.gameId,
+      status: MatchStatus.VALIDE
+    }
+  });
+  if (gameCapacity <= 0 || validatedCount >= gameCapacity) {
+    await interaction.editReply({
+      content: `⛔ Aucune table disponible pour ${match.game.label} sur cette soirée.`
     });
     return;
   }
@@ -3544,7 +3755,7 @@ async function showTablesSetModal(
 
   const modal = {
     custom_id: "mu_tables:set_modal",
-    title: "Définir les tables",
+    title: "Définir les tables par jeu",
     components: [
       {
         type: 1,
@@ -3564,11 +3775,11 @@ async function showTablesSetModal(
         components: [
           {
             type: 4,
-            custom_id: "count",
-            label: "Nombre de tables",
-            style: TextInputStyle.Short,
+            custom_id: "allocations",
+            label: "Tables par jeu",
+            style: TextInputStyle.Paragraph,
             required: true,
-            placeholder: "12"
+            placeholder: "W40K=5, AoS=2"
           }
         ]
       }

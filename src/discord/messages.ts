@@ -8,6 +8,7 @@ import type { AppConfig } from "../config";
 import { getPrisma } from "../db";
 import { listActiveGames, resolveGameFromInput } from "../services/games";
 import { getSlotDays, formatSlotDays, isSlotDay } from "../services/slots";
+import { getGameTableCapacity } from "../services/table-capacity";
 import { formatFrenchDate, parseFrenchDayMonth } from "../utils/dates";
 
 const BASE_USAGE =
@@ -108,8 +109,21 @@ export async function handleMatchMessage(
     return;
   }
 
-  if (event.status === "FERME" || event.tables <= 0) {
+  if (event.status === "FERME") {
     await message.reply("⛔ Soirée fermée : les réservations sont impossibles.");
+    return;
+  }
+
+  if (event.tables <= 0) {
+    await message.reply(
+      "⏳ Les tables ne sont pas encore configurées pour cette soirée. Les réservations ouvriront dès qu'un admin aura défini les tables."
+    );
+    return;
+  }
+
+  const gameCapacity = await getGameTableCapacity(prisma, event, game.id);
+  if (gameCapacity <= 0) {
+    await message.reply(`⏳ Aucune table n'est configurée pour ${game.label} sur cette soirée.`);
     return;
   }
 

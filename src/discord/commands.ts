@@ -33,6 +33,12 @@ export const commands = [
             type: ApplicationCommandOptionType.Integer,
             required: true,
             minValue: 0
+          },
+          {
+            name: "game",
+            description: "Jeu concerné (optionnel, ex: W40K)",
+            type: ApplicationCommandOptionType.String,
+            required: false
           }
         ]
       },
