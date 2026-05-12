@@ -2548,20 +2548,32 @@ async function buildRegisteredSlotsTable(config: AppConfig): Promise<string> {
     return "Aucun créneau enregistré.";
   }
 
-  const rows = events.map((event) => {
-    const date = dayjs(event.date).tz(config.timezone);
-    return `| ${formatFrenchDate(date)} | ${event.tables} | ${formatEventStatus(event)} |`;
-  });
-
-  return ["| Date | Tables | Statut |", "| --- | --- | --- |", ...rows].join("\n");
+  return events
+    .map((event) => {
+      const date = dayjs(event.date).tz(config.timezone);
+      return `• ${formatFrenchDate(date)} — ${formatEventStatus(event)}`;
+    })
+    .join("\n");
 }
 
 function formatEventStatus(event: { status: string; tables: number; isVacation: boolean }): string {
-  if (event.status === "OUVERT") {
-    return event.tables > 0 ? "Disponible" : "Ouvert";
+  if (event.status === "FERME") {
+    return event.isVacation ? "💀 Fermé (vacances)" : "🔴 Fermé";
   }
 
-  return event.isVacation ? "Fermé (vacances)" : "Fermé";
+  if (event.tables <= 0) {
+    return "🟡 À configurer — aucune table";
+  }
+
+  return `🟢 Disponible — ${formatTableCount(event.tables)}`;
+}
+
+function formatTableCount(tables: number): string {
+  if (tables <= 1) {
+    return `${tables} table`;
+  }
+
+  return `${tables} tables`;
 }
 
 async function buildMonthSlotsOverview(
