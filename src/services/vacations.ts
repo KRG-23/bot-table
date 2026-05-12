@@ -9,6 +9,8 @@ dayjs.extend(timezone);
 const API_BASE =
   "https://data.education.gouv.fr/api/explore/v2.1/catalog/datasets/fr-en-calendrier-scolaire/records";
 const POPULATION_VALUES = ["Élèves", "-"];
+// The official dataset exposes this bridge as a school-calendar record, but it is not a club closure.
+const IGNORED_DESCRIPTIONS = ["pont de l'ascension"];
 const CACHE_TTL_MS = 12 * 60 * 60 * 1000;
 
 type VacationRecord = {
@@ -83,7 +85,8 @@ async function fetchVacations(academy: string, logger: Logger): Promise<Vacation
       const populationAllowed = POPULATION_VALUES.some(
         (value) => normalize(value) === populationNorm
       );
-      return normalize(record.location) === academyNorm && populationAllowed;
+      const ignored = IGNORED_DESCRIPTIONS.includes(normalize(record.description ?? ""));
+      return normalize(record.location) === academyNorm && populationAllowed && !ignored;
     });
 
     cache = {
