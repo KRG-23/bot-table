@@ -134,12 +134,13 @@ Enable the following **Privileged Gateway Intents** in the Discord Developer Por
 - `/mu_match refuse <date> <player1> <player2> [reason]` — refuse a match
 - `/mu_match cancel <date> <player1> <player2> [reason]` — cancel a match (admin or player)
 - `/mu_games list` — list configured games
-- `/mu_games add <code> <label> <channel>` — add a game
+- `/mu_games add <code> <label> <channel> [default_tables]` — add a game
 - `/mu_games set_channel <game> <channel>` — update a game's thread channel
+- `/mu_games set_default_tables <game> <count>` — update the table count applied by default to new slots
 - `/mu_games disable <game>` — disable a game
 - `/mu_games enable <game>` — enable a game
 
-The `/mu_config` menu starts on “Accueil” with a language selector and a table of recorded slots. A base settings reminder appears as a quote block. Admins can configure slot days (multiple weekdays), manage games + channels, automation timing, and use category buttons for slots, games, matches, and tables. The Tables category lets admins choose a date, select a game from a dropdown, and set that game's table count. Defaults can be applied in one click: `W40K=5`, `AoS=2`. New games created from the menu default to `DISCORD_CHANNEL_ID` until reassigned.
+The `/mu_config` menu starts on “Accueil” with a language selector and a table of recorded slots. A base settings reminder appears as a quote block. Admins can configure slot days (multiple weekdays), manage games + channels, per-game default table counts, automation timing, and use category buttons for slots, games, matches, and tables. The Tables category lets admins choose a date, select a game from a dropdown, and set that game's table count. Defaults can be applied in one click from the values configured on active games. New games created from the menu default to `DISCORD_CHANNEL_ID` until reassigned; W40K and AoS are prefilled with 5 and 2 tables respectively when detected.
 
 Each generated game thread also includes admin-only buttons:
 
@@ -151,7 +152,7 @@ Each generated game thread also includes admin-only buttons:
 
 When the bot is ready, it schedules the next automation runs in `TZ` (default `Europe/Paris`) without polling continuously. The schedule is configurable from `/mu_config` > “Automatisations”; saved changes refresh the in-memory scheduler.
 
-Monthly slot generation runs by default on the first Sunday of the month at 09:00. It generates the current month's configured slots once, skips school holiday/holiday-eve closures, applies the default per-game table counts (`W40K=5`, `AoS=2`) to new or empty slots, and posts a summary in `DISCORD_CHANNEL_ID`. Per-game threads are created when the corresponding game has tables configured for the slot.
+Monthly slot generation runs by default on the first Sunday of the month at 09:00. It generates the current month's configured slots once, skips school holiday/holiday-eve closures, applies the configured per-game default table counts to new or empty slots, and posts a summary in `DISCORD_CHANNEL_ID`. Per-game threads are created when the corresponding game has tables configured for the slot.
 
 - existing slots are reused
 - missing per-game threads are recreated for open slots with configured tables for that game

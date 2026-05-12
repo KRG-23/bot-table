@@ -62,6 +62,7 @@ import {
   getDefaultGameTableCount,
   getEventTableCapacity,
   getGameTableCapacity,
+  inferInitialGameDefaultTableCount,
   recalculateEventTables,
   replaceGameTableCapacities,
   upsertGameTableCapacity
@@ -245,8 +246,9 @@ export async function handleInteraction(
       const code = interaction.options.getString("code", true);
       const label = interaction.options.getString("label", true);
       const selected = interaction.options.getChannel("channel", true);
+      const defaultTables = interaction.options.getInteger("default_tables") ?? undefined;
       const channel: ChannelLike = { id: selected.id, type: selected.type };
-      await handleGamesAdd(interaction, config, { code, label, channel });
+      await handleGamesAdd(interaction, config, { code, label, channel, defaultTables });
       return;
     }
 
@@ -255,6 +257,13 @@ export async function handleInteraction(
       const selected = interaction.options.getChannel("channel", true);
       const channel: ChannelLike = { id: selected.id, type: selected.type };
       await handleGamesSetChannel(interaction, { gameInput, channel });
+      return;
+    }
+
+    if (subcommand === "set_default_tables") {
+      const gameInput = interaction.options.getString("game", true);
+      const count = interaction.options.getInteger("count", true);
+      await handleGamesSetDefaultTables(interaction, { gameInput, count });
       return;
     }
 
@@ -509,6 +518,15 @@ export async function handleButtonInteraction(
     }
 
     await showGameAddModal(interaction);
+    return;
+  }
+
+  if (interaction.customId.startsWith("mu_games:default_tables:")) {
+    if (!(await ensureAdmin(interaction, config))) {
+      return;
+    }
+
+    await showGameDefaultTablesModal(interaction);
     return;
   }
 
@@ -854,10 +872,32 @@ export async function handleModalSubmit(
 
     const codeInput = interaction.fields.getTextInputValue("code");
     const labelInput = interaction.fields.getTextInputValue("label");
+    const defaultTablesInput = interaction.fields.getTextInputValue("defaultTables");
+    const defaultTables = parseOptionalNonNegativeInteger(defaultTablesInput);
+    if (defaultTables === null) {
+      await replyEphemeral(interaction, {
+        content: "❌ Nombre de tables par défaut invalide."
+      });
+      return;
+    }
+
     await handleGamesAdd(interaction, config, {
       code: codeInput,
-      label: labelInput
+      label: labelInput,
+      defaultTables
     });
+    return;
+  }
+
+  if (interaction.customId.startsWith("mu_games:default_tables_modal:")) {
+    if (!interaction.member || !isAdminMember(interaction.member, config)) {
+      await replyEphemeral(interaction, {
+        content: "⛔ Cette commande est réservée aux administrateurs."
+      });
+      return;
+    }
+
+    await handleGameDefaultTablesModal(interaction);
     return;
   }
 
@@ -1062,6 +1102,7 @@ type GameAddInput = {
   code: string;
   label: string;
   channel?: ChannelLike;
+  defaultTables?: number;
 };
 
 type GameChannelInput = {
@@ -1085,6 +1126,11 @@ type GameSaveInput = {
   channelId: string;
 };
 
+type GameDefaultTablesInput = {
+  gameInput: string;
+  count: number;
+};
+
 function sanitizeGameCode(input: string): string {
   return input
     .trim()
@@ -1093,6 +1139,16 @@ function sanitizeGameCode(input: string): string {
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/[^A-Z0-9]+/g, "_")
     .replace(/^_+|_+$/g, "");
+}
+
+function parseOptionalNonNegativeInteger(input: string): number | undefined | null {
+  const trimmed = input.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+
+  const value = Number(trimmed);
+  return Number.isInteger(value) && value >= 0 ? value : null;
 }
 
 function isValidGameChannel(channel: ChannelLike): boolean {
@@ -1143,6 +1199,15 @@ async function handleGamesAdd(
     return;
   }
 
+  const inferredDefaultTables = inferInitialGameDefaultTableCount({ code, label });
+  const defaultTables = input.defaultTables ?? inferredDefaultTables;
+  if (!Number.isInteger(defaultTables) || defaultTables < 0) {
+    await replyEphemeral(interaction, {
+      content: "❌ Nombre de tables par défaut invalide."
+    });
+    return;
+  }
+
   const prisma = getPrisma();
   const existing = await prisma.game.findMany();
   const normalizedCode = normalizeGameInput(code);
@@ -1166,6 +1231,7 @@ async function handleGamesAdd(
       code,
       label,
       channelId,
+      defaultTables,
       active: true
     }
   });
@@ -1174,6 +1240,73 @@ async function handleGamesAdd(
     gameId: game.id,
     channelId: game.channelId,
     notice: "✅ Jeu ajouté."
+  });
+  await replyEphemeral(interaction, panel);
+}
+
+async function handleGamesSetDefaultTables(
+  interaction: EphemeralInteraction,
+  input: GameDefaultTablesInput
+): Promise<void> {
+  if (!Number.isInteger(input.count) || input.count < 0) {
+    await replyEphemeral(interaction, {
+      content: "❌ Nombre de tables par défaut invalide."
+    });
+    return;
+  }
+
+  const prisma = getPrisma();
+  const game = await resolveGameFromInput(prisma, input.gameInput, true);
+
+  if (!game) {
+    await replyEphemeral(interaction, {
+      content: "❌ Jeu introuvable."
+    });
+    return;
+  }
+
+  await prisma.game.update({
+    where: { id: game.id },
+    data: { defaultTables: input.count }
+  });
+
+  const panel = await buildGamesConfigPayload({
+    gameId: game.id,
+    channelId: game.channelId,
+    notice: `✅ Tables par défaut mises à jour : ${formatTableCount(input.count)}.`
+  });
+  await replyEphemeral(interaction, panel);
+}
+
+async function handleGameDefaultTablesModal(interaction: ModalSubmitInteraction): Promise<void> {
+  const gameId = Number(interaction.customId.replace("mu_games:default_tables_modal:", ""));
+  const count = Number(interaction.fields.getTextInputValue("count"));
+
+  if (!Number.isInteger(gameId) || !Number.isInteger(count) || count < 0) {
+    await replyEphemeral(interaction, {
+      content: "❌ Nombre de tables par défaut invalide."
+    });
+    return;
+  }
+
+  const prisma = getPrisma();
+  const game = await prisma.game.findUnique({ where: { id: gameId } });
+  if (!game) {
+    await replyEphemeral(interaction, {
+      content: "❌ Jeu introuvable."
+    });
+    return;
+  }
+
+  await prisma.game.update({
+    where: { id: game.id },
+    data: { defaultTables: count }
+  });
+
+  const panel = await buildGamesConfigPayload({
+    gameId: game.id,
+    channelId: game.channelId,
+    notice: `✅ Tables par défaut mises à jour : ${formatTableCount(count)}.`
   });
   await replyEphemeral(interaction, panel);
 }
@@ -1405,6 +1538,7 @@ async function buildTablesGameConfigPayload(
 
   const selectedGame = activeGames.find((game) => game.id === selectedGameId) ?? activeGames[0];
   const dateKey = formatTableDateKey(parsedDate);
+  const defaultsSummary = formatDefaultGameTableSummary(activeGames);
   const tableLines = activeGames.map((game) => {
     const current = capacity?.usesGameCapacities ? (capacityByGame.get(game.id) ?? 0) : 0;
     const fallback = getDefaultGameTableCount(game);
@@ -1423,7 +1557,7 @@ async function buildTablesGameConfigPayload(
       globalNotice,
       "",
       "Choisis un jeu dans la liste, puis saisis son nombre de tables.",
-      "Tu peux aussi appliquer les valeurs par défaut : W40K = 5, AoS = 2.",
+      `Tu peux aussi appliquer les valeurs par défaut : ${defaultsSummary}.`,
       "",
       `Jeu sélectionné : ${selectedGame.label}`,
       "",
@@ -1598,7 +1732,7 @@ async function handleTablesApplyDefaults(
   const allocations = await buildDefaultGameTableAllocations(getPrisma());
   if (allocations.length === 0) {
     await replyEphemeral(interaction, {
-      content: "❌ Aucun jeu actif ne correspond aux valeurs par défaut W40K/AoS."
+      content: "❌ Aucun jeu actif n'a de tables par défaut configurées."
     });
     return;
   }
@@ -3029,8 +3163,26 @@ function formatGameStatus(game: Game): string {
   return game.active ? "actif" : "désactivé";
 }
 
+function formatGameDefaultTables(game: Game): string {
+  return formatTableCount(getDefaultGameTableCount(game));
+}
+
+function formatDefaultGameTableSummary(games: Game[]): string {
+  const defaults = games
+    .map((game) => ({ game, tables: getDefaultGameTableCount(game) }))
+    .filter((entry) => entry.tables > 0);
+
+  if (defaults.length === 0) {
+    return "aucune valeur configurée";
+  }
+
+  return defaults.map((entry) => `${entry.game.label} = ${entry.tables}`).join(", ");
+}
+
 function formatGameLine(game: Game): string {
-  return `• ${game.label} (${game.code}) — <#${game.channelId}> — ${formatGameStatus(game)}`;
+  return `• ${game.label} (${game.code}) — <#${game.channelId}> — défaut ${formatGameDefaultTables(
+    game
+  )} — ${formatGameStatus(game)}`;
 }
 
 function buildGamesSelectRow(games: Game[], selectedId: number): ReplyComponentRow {
@@ -3046,7 +3198,9 @@ function buildGamesSelectRow(games: Game[], selectedId: number): ReplyComponentR
         options: games.map((game) => ({
           label: game.label,
           value: String(game.id),
-          description: `${game.code} · ${formatGameStatus(game)}`,
+          description: `${game.code} · défaut ${getDefaultGameTableCount(game)} · ${formatGameStatus(
+            game
+          )}`,
           default: game.id === selectedId
         }))
       }
@@ -3107,6 +3261,12 @@ function buildGamesActionRow(game: Game, channelId?: string): ReplyComponentRow 
         label: "Enregistrer",
         style: ButtonStyle.Primary,
         disabled: !canSave
+      },
+      {
+        type: 2,
+        custom_id: `mu_games:default_tables:${game.id}`,
+        label: "Tables par défaut",
+        style: ButtonStyle.Secondary
       },
       toggle,
       {
@@ -3169,6 +3329,7 @@ async function buildGamesConfigPayload(state: GameConfigState): Promise<ReplyPay
       "",
       `Jeu sélectionné : ${selectedGame.label} (${selectedGame.code})`,
       `Canal sélectionné : <#${selectedChannelId}>`,
+      `Tables par défaut : ${formatGameDefaultTables(selectedGame)}`,
       "",
       "Jeux configurés :",
       orderedGames.map(formatGameLine).join("\n")
@@ -3252,7 +3413,9 @@ function formatGamesInline(games: Game[]): string {
     return "Aucun";
   }
 
-  return games.map((game) => game.label).join(", ");
+  return games
+    .map((game) => `${game.label} (${formatGameDefaultTables(game)} par défaut)`)
+    .join(", ");
 }
 
 async function buildConfigMenuContent(config: AppConfig): Promise<string> {
@@ -3335,6 +3498,7 @@ async function buildConfigCategoryResponse(
       content: [
         buildConfigCategoryContent("**Jeux & canaux**"),
         "Associez chaque jeu au canal où créer ses fils de discussion.",
+        "Les tables par défaut servent à préremplir les nouveaux créneaux.",
         "",
         `Jeux configurés (${orderedGames.length}) :`,
         gameLines
@@ -3355,7 +3519,7 @@ async function buildConfigCategoryResponse(
       content: [
         buildConfigCategoryContent("**Tables**"),
         "Définissez les tables par jeu pour une soirée.",
-        "Format attendu : `W40K=5, AoS=2`."
+        "Les valeurs par défaut se configurent dans “Jeux”."
       ].join("\n"),
       components: [buildConfigMenuSelect("tables"), ...buildTablesCategoryRows()]
     };
@@ -4154,6 +4318,61 @@ async function showGameAddModal(interaction: ButtonInteraction): Promise<void> {
             style: TextInputStyle.Short,
             required: true,
             placeholder: "Warhammer 40k"
+          }
+        ]
+      },
+      {
+        type: 1,
+        components: [
+          {
+            type: 4,
+            custom_id: "defaultTables",
+            label: "Tables par défaut",
+            style: TextInputStyle.Short,
+            required: false,
+            placeholder: "0, 5 pour W40K, 2 pour AoS"
+          }
+        ]
+      }
+    ]
+  };
+
+  await interaction.showModal(modal as ModalPayload);
+}
+
+async function showGameDefaultTablesModal(interaction: ButtonInteraction): Promise<void> {
+  if (!interaction.inGuild()) {
+    await replyEphemeral(interaction, { content: "Commande réservée au serveur." });
+    return;
+  }
+
+  const gameId = Number(interaction.customId.replace("mu_games:default_tables:", ""));
+  if (!Number.isInteger(gameId)) {
+    await replyEphemeral(interaction, { content: "❌ Jeu invalide." });
+    return;
+  }
+
+  const game = await getPrisma().game.findUnique({ where: { id: gameId } });
+  if (!game) {
+    await replyEphemeral(interaction, { content: "❌ Jeu introuvable." });
+    return;
+  }
+
+  const modal = {
+    custom_id: `mu_games:default_tables_modal:${game.id}`,
+    title: `Défaut ${game.label}`.slice(0, 45),
+    components: [
+      {
+        type: 1,
+        components: [
+          {
+            type: 4,
+            custom_id: "count",
+            label: `Tables par défaut`.slice(0, 45),
+            style: TextInputStyle.Short,
+            required: true,
+            value: String(getDefaultGameTableCount(game)),
+            placeholder: "0"
           }
         ]
       }

@@ -20,7 +20,7 @@
    - Création ou réactivation d’un fil par jeu au format « Soirée <Jeu> le <date du vendredi> » pour les créneaux du mois, uniquement lorsque des tables sont configurées pour ce jeu. Par défaut, les fils du mois sont préparés le **premier dimanche du mois à 09h00**.
    - Le jour, la semaine du mois et l’heure sont paramétrables depuis le menu de configuration.
    - Si le vendredi correspondant est **veille de vacances scolaires de l’académie de Nantes** ou pendant ces vacances, le fil n’est pas créé et aucune partie n’est autorisée.
-   - Les créneaux partent des tables par défaut `W40K=5`, `AoS=2`; un admin ajuste ensuite le **nombre de tables par jeu** via commande ou menu de configuration.
+   - Les créneaux partent des tables par défaut configurées sur chaque jeu ; un admin ajuste ensuite le **nombre de tables par jeu** via commande ou menu de configuration.
 
 2. **Dimanche → Mercredi**
    - Les joueurs s’entendent et **notent le bot** dans le fil avec la mention des deux pseudos (ex. `@Bot @Joueur1 vs @Joueur2`), en indiquant le système de jeu.
@@ -39,7 +39,7 @@
 
 ## 4. Exigences fonctionnelles
 
-- **Collecte des tables** : commande admin pour saisir/modifier le nombre de tables par jeu d’un vendredi. La table Billard n’a pas de traitement spécial autre que d’être comptée dans le jeu choisi.
+- **Collecte des tables** : commande admin pour saisir/modifier le nombre de tables par jeu d’un vendredi. Les valeurs par défaut de chaque jeu servent à préremplir les nouveaux créneaux. La table Billard n’a pas de traitement spécial autre que d’être comptée dans le jeu choisi.
 - **Création automatique des fils** : un fil par jeu pour chaque vendredi du mois, créé uniquement si ce jeu a au moins une table ; réutiliser le fil s’il existe déjà.
 - **Gestion depuis le fil** : un admin peut consulter l’état du jeu, modifier ses tables et valider les parties possibles directement depuis le fil.
 - **Saisie d’une partie** : message mentionnant le bot + les deux joueurs + le jeu. Le bot répond avec un récap et le statut (`en_attente` ou `valide`).

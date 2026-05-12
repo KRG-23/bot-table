@@ -2,7 +2,7 @@ import type { Event, Game, PrismaClient } from "@prisma/client";
 
 import { listActiveGames, normalizeGameInput, resolveGameFromInput } from "./games";
 
-const DEFAULT_GAME_TABLE_COUNTS = [
+const INITIAL_GAME_DEFAULT_TABLE_COUNTS = [
   {
     aliases: ["w40k", "warhammer 40000", "warhammer 40k"],
     tables: 5
@@ -29,13 +29,17 @@ export type EventTableCapacity = {
   gameTables: GameTableCapacity[];
 };
 
-export function getDefaultGameTableCount(game: Pick<Game, "code" | "label">): number {
+export function inferInitialGameDefaultTableCount(game: Pick<Game, "code" | "label">): number {
   const normalizedValues = [normalizeGameInput(game.code), normalizeGameInput(game.label)];
-  const defaultEntry = DEFAULT_GAME_TABLE_COUNTS.find((entry) =>
+  const defaultEntry = INITIAL_GAME_DEFAULT_TABLE_COUNTS.find((entry) =>
     entry.aliases.some((alias) => normalizedValues.includes(normalizeGameInput(alias)))
   );
 
   return defaultEntry?.tables ?? 0;
+}
+
+export function getDefaultGameTableCount(game: Pick<Game, "defaultTables">): number {
+  return Math.max(game.defaultTables, 0);
 }
 
 export async function buildDefaultGameTableAllocations(

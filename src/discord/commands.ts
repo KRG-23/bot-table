@@ -262,6 +262,13 @@ export const commands = [
             description: "Canal où créer les fils",
             type: ApplicationCommandOptionType.Channel,
             required: true
+          },
+          {
+            name: "default_tables",
+            description: "Tables par défaut pour les nouveaux créneaux",
+            type: ApplicationCommandOptionType.Integer,
+            required: false,
+            minValue: 0
           }
         ]
       },
@@ -281,6 +288,26 @@ export const commands = [
             description: "Canal où créer les fils",
             type: ApplicationCommandOptionType.Channel,
             required: true
+          }
+        ]
+      },
+      {
+        name: "set_default_tables",
+        description: "Définir les tables par défaut d'un jeu",
+        type: ApplicationCommandOptionType.Subcommand,
+        options: [
+          {
+            name: "game",
+            description: "Code ou libellé du jeu",
+            type: ApplicationCommandOptionType.String,
+            required: true
+          },
+          {
+            name: "count",
+            description: "Tables par défaut pour les nouveaux créneaux",
+            type: ApplicationCommandOptionType.Integer,
+            required: true,
+            minValue: 0
           }
         ]
       },
