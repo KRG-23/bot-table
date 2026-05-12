@@ -2642,13 +2642,11 @@ async function buildMonthSlotsOverview(
       const closure = closures[index];
       const event = eventByDate.get(key);
 
-      let status = "Fermé (non créé)";
+      let status = "⚪ Non créé";
       if (closure?.closed) {
-        status = "Fermé (vacances)";
-      } else if (event && event.status === "OUVERT" && event.tables > 0) {
-        status = "Disponible";
+        status = "💀 Fermé (vacances)";
       } else if (event) {
-        status = "Fermé";
+        status = formatEventStatus(event);
       }
 
       return `• ${slotDate.format("DD/MM")} : ${status}`;
