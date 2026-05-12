@@ -32,7 +32,15 @@ type SendableChannel = {
 };
 
 type ThreadStarterMessage = {
-  startThread: (options: { name: string; autoArchiveDuration?: number }) => Promise<{ id: string }>;
+  startThread: (options: {
+    name: string;
+    autoArchiveDuration?: number;
+  }) => Promise<ThreadStarterResult>;
+};
+
+type ThreadStarterResult = {
+  id: string;
+  send: (payload: { content: string }) => Promise<unknown>;
 };
 
 export type EventThreadResult = {
@@ -48,6 +56,25 @@ function formatThreadDayMonth(date: dayjs.Dayjs): string {
 
 function buildThreadName(game: Game, date: dayjs.Dayjs): string {
   return `Soirée ${game.label} le ${formatThreadDayMonth(date)}`;
+}
+
+function buildThreadGuideMessage(game: Game, date: dayjs.Dayjs, botName: string): string {
+  return [
+    `**Bienvenue sur la soirée ${game.label} du ${formatFrenchDate(date)}.**`,
+    "",
+    "**Réserver une partie**",
+    `Écris dans ce fil : \`@${botName} @Joueur1 vs @Joueur2 ${game.label}\``,
+    `Exemple : \`@${botName} @Alice vs @Bob ${game.label}\``,
+    "",
+    "**Validation**",
+    "Après l'enregistrement, le bot affiche les boutons **Valider**, **Refuser** et **Annuler**.",
+    "Les joueurs peuvent confirmer ou corriger la partie depuis ces boutons.",
+    "",
+    "**Règles utiles**",
+    "• Une seule partie par joueur pour la soirée.",
+    "• Les réservations sont bloquées si le créneau est fermé ou sans table.",
+    "• Les admins gèrent les tables, les jeux et les annulations depuis `/mu_config`."
+  ].join("\n");
 }
 
 function isSendableChannel(channel: unknown): channel is SendableChannel {
@@ -126,6 +153,14 @@ export async function ensureEventThreads(
         name: threadName,
         autoArchiveDuration: 10080
       });
+
+      try {
+        await thread.send({
+          content: buildThreadGuideMessage(game, eventDate, client.user?.username ?? "Munitorum")
+        });
+      } catch (err) {
+        logger.warn({ err, gameId: game.id, eventId: event.id }, "Failed to send thread guide");
+      }
 
       await prisma.eventThread.create({
         data: {
