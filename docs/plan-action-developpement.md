@@ -53,11 +53,11 @@
 - [x] Job “1er dimanche” : création des fils par jeu
 - [x] Nom des fils : “Soirée <Jeu> le <date>”
 - [x] Skip vacances/veille vacances + message d’info
-- [ ] Job “mercredi 21h” : récap + auto-validation si capacité OK
+- [x] Job “mercredi 21h” : récap + auto-validation si capacité OK
 - [ ] Job “vendredi 17h” : notifications finales
 - [ ] Job “samedi 23h” : backup + rétention 1 mois
 - [ ] Script backup Postgres + purge old dumps
-  - [x] Bloquant : définir le moteur de scheduling (scheduler interne léger via check horaire)
+  - [x] Bloquant : définir le moteur de scheduling (scheduler interne à prochaine exécution)
 
 ## Phase 6 — Notifications & règles métier
 

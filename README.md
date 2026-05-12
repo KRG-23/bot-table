@@ -142,13 +142,15 @@ The `/mu_config` menu starts on “Accueil” with a language selector and a tab
 
 ## Automations
 
-When the bot is ready, it checks once per hour whether the current day is the first Sunday of the month in `TZ` (default `Europe/Paris`). On that day, it generates the current month's configured slots once, skips school holiday/holiday-eve closures, creates the per-game threads, and posts a summary in `DISCORD_CHANNEL_ID`.
+When the bot is ready, it schedules the next automation runs in `TZ` (default `Europe/Paris`) without polling continuously.
 
-The monthly job is idempotent:
+Monthly slot generation runs on the first Sunday of the month at 09:00. It generates the current month's configured slots once, skips school holiday/holiday-eve closures, creates the per-game threads, and posts a summary in `DISCORD_CHANNEL_ID`.
 
 - existing slots are reused
 - missing per-game threads are recreated
 - the last automatic run month is stored in the `monthly_slots_last_auto_run` setting
+
+Weekly match review runs every Wednesday at 21:00. It reviews open slots for the next 7 days, auto-validates pending matches when validated + pending matches fit within available tables, sends player DMs, and posts a recap in `DISCORD_CHANNEL_ID`.
 
 ## Scenarios (slash + buttons parity)
 
