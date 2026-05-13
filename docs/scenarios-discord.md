@@ -42,7 +42,7 @@ Objectif : s'assurer qu'un admin peut tout faire via les commandes **ou** via l'
 - Les jeux sont configurés dynamiquement et chaque jeu doit avoir un canal associé.
 - Les tables d’une soirée se règlent en choisissant une date parmi les créneaux déjà créés, puis un jeu.
 - Chaque fil de soirée expose un mini-panneau admin limité au jeu + créneau du fil.
-- Dans un fil de soirée créé par jeu, une demande de partie peut omettre le jeu : `@Otto @Joueur1 vs @Joueur2`.
+- Dans un fil de soirée créé par jeu, une demande de partie peut omettre le jeu : `@Joueur1 vs @Joueur2`.
 - Une partie annulée ou refusée libère les joueurs ; seuls les statuts en attente et validé bloquent une nouvelle réservation sur le même créneau.
 - Après une annulation, le bot tente immédiatement l’auto-validation des parties en attente du même jeu si toute la file rentre dans les tables disponibles.
 - Les automatisations ont des valeurs par défaut, mais l’admin peut modifier le jour, l’heure et la fenêtre d’analyse depuis `/ot_config`.

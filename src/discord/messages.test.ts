@@ -74,6 +74,15 @@ test("parseMatchMessage accepts two Discord mentions without a game", async () =
   });
 });
 
+test("parseMatchMessage accepts thread requests without the bot mention", async () => {
+  const parsed = await parseMatchMessage(message(`<@${ALICE_ID}> vs <@${BOB_ID}>`), BOT_ID);
+
+  assert.deepEqual(parsed, {
+    player1Id: ALICE_ID,
+    player2Id: BOB_ID
+  });
+});
+
 test("parseMatchMessage extracts a trailing game after a Discord ID", async () => {
   const parsed = await parseMatchMessage(
     message(`<@!${BOT_ID}> <@${NICO_ID}> vs ${TV_ID} 40k`),

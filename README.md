@@ -175,7 +175,7 @@ Each generated game thread also includes admin-only buttons:
 - `Tables` — update the table count for this game only
 - `Confirmer` — validate pending matches for this game up to the available capacity
 
-In a generated game thread, players can create a match with `@Otto @Joueur1 vs @Joueur2`; the game is inferred from the thread. Adding the game at the end still works when it matches the thread.
+In a generated game thread, players can create a match with `@Joueur1 vs @Joueur2`; the game is inferred from the thread. Adding the game at the end still works when it matches the thread.
 Only pending or validated matches block a player from booking another match on the same slot. Refused or cancelled matches keep their history but release both players for a new booking.
 
 ## Automations

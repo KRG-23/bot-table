@@ -59,13 +59,13 @@ function buildThreadName(game: Game, date: dayjs.Dayjs): string {
   return `Soirée ${game.label} le ${formatThreadDayMonth(date)}`;
 }
 
-function buildThreadGuideMessage(game: Game, date: dayjs.Dayjs, botName: string): string {
+function buildThreadGuideMessage(game: Game, date: dayjs.Dayjs): string {
   return [
     `**Bienvenue sur la soirée ${game.label} du ${formatFrenchDate(date)}.**`,
     "",
     "**Réserver une partie**",
-    `Écris dans ce fil : \`@${botName} @Joueur1 vs @Joueur2\``,
-    `Exemple : \`@${botName} @Alice vs @Bob\``,
+    "Écris dans ce fil : `@Joueur1 vs @Joueur2`",
+    "Exemple : `@Alice vs @Bob`",
     `Le jeu est déduit automatiquement de ce fil (${game.label}).`,
     "",
     "**Validation**",
@@ -193,7 +193,7 @@ export async function ensureEventThreads(
 
       try {
         await thread.send({
-          content: buildThreadGuideMessage(game, eventDate, client.user?.username ?? "Otto"),
+          content: buildThreadGuideMessage(game, eventDate),
           components: [buildThreadAdminRow(event.id, game.id)]
         });
       } catch (err) {

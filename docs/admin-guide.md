@@ -57,7 +57,7 @@ Chaque fil de soirée correspond à un jeu et une date :
 Dans un fil, les joueurs peuvent créer une partie avec :
 
 ```text
-@Otto @Joueur1 vs @Joueur2
+@Joueur1 vs @Joueur2
 ```
 
 Le jeu est déduit automatiquement du fil. Le bot accepte aussi une mention, un

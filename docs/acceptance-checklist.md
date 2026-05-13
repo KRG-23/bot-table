@@ -87,7 +87,7 @@ Attendu :
 Action dans un fil de soirée :
 
 ```text
-@Otto @Joueur1 vs @Joueur2
+@Joueur1 vs @Joueur2
 ```
 
 Attendu :

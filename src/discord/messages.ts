@@ -17,7 +17,7 @@ import { getGameTableCapacity } from "../services/table-capacity";
 import { formatFrenchDate, parseFrenchDayMonth } from "../utils/dates";
 
 const BASE_USAGE =
-  "Format attendu : @Otto @Joueur1 vs @Joueur2 [jeu]. Les joueurs doivent être une mention, un ID Discord ou un nom exact du serveur.";
+  "Format attendu : @Joueur1 vs @Joueur2 [jeu]. Dans un fil de soirée, le jeu est déduit automatiquement. Les joueurs doivent être une mention, un ID Discord ou un nom exact du serveur.";
 
 type ParsedMatch = {
   player1Id: string;
@@ -43,7 +43,14 @@ export async function handleMatchMessage(
     return;
   }
 
-  if (!message.mentions.users.has(botId)) {
+  const prisma = getPrisma();
+  const threadContext = await findEventThreadContext(prisma, message.channel.id);
+  const botMentioned = message.mentions.users.has(botId);
+  if (!botMentioned && !threadContext) {
+    return;
+  }
+
+  if (!botMentioned && !hasMatchSeparator(message.content)) {
     return;
   }
 
@@ -77,8 +84,6 @@ export async function handleMatchMessage(
     }
   }
 
-  const prisma = getPrisma();
-  const threadContext = await findEventThreadContext(prisma, message.channel.id);
   const threadDate = threadContext
     ? dayjs(threadContext.event.date).tz(config.timezone).startOf("day")
     : resolveThreadDate(message.channel.name, config.timezone);
@@ -312,6 +317,10 @@ export async function parseMatchMessage(
     player2Id: player2WithGame.playerId,
     gameInput: player2WithGame.gameInput
   };
+}
+
+function hasMatchSeparator(content: string): boolean {
+  return /\s+(?:vs|contre)\s+/i.test(content);
 }
 
 async function resolvePlayerWithGameInput(
