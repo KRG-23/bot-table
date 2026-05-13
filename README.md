@@ -225,6 +225,7 @@ Key vars:
 
 - The Postgres host port is mapped to **5433** to avoid conflicts with other local instances.
 - If you want to use 5432, edit `docker-compose.yml`.
+- Compose rotates `bot` and `postgres` JSON logs at 10 MB with 5 retained files.
 - Manual backup: `npm run backup`.
 
 ## Project structure

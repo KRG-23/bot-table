@@ -73,13 +73,13 @@
 ## Phase 7 — Observabilité & qualité
 
 - [x] Logs structurés actions critiques
-- [ ] Rotation des logs
+- [x] Rotation des logs Docker
 - [x] Métriques basiques (parties, erreurs Discord)
 - [x] Tests unitaires règles métier
 - [x] Tests parsing messages
 - [x] Tests permissions
 - [x] Script `npm run check` (lint + build + tests)
-  - [ ] Bloquant : définir le niveau minimal de tests avant prod (smoke vs unit)
+  - [x] Bloquant : niveau minimal actuel = lint + build + smoke/unit tests via `npm run check`
 
 ## Phase 8 — Packaging & docs
 

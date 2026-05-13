@@ -14,6 +14,11 @@ services:
     volumes:
       - ./:/usr/src/app
     command: sh -c "npm run prisma:generate && npm run dev"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
     restart: unless-stopped
 
   postgres:
@@ -32,6 +37,11 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
     restart: unless-stopped
 
 volumes:
