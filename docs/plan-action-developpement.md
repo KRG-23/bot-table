@@ -76,7 +76,7 @@
 - [ ] Métriques basiques (parties, erreurs Discord)
 - [x] Tests unitaires règles métier
 - [x] Tests parsing messages
-- [ ] Tests permissions
+- [x] Tests permissions
 - [x] Script `npm run check` (lint + build + tests)
   - [ ] Bloquant : définir le niveau minimal de tests avant prod (smoke vs unit)
 

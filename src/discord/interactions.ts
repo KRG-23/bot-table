@@ -48,6 +48,7 @@ import {
   resolveGameFromInput
 } from "../services/games";
 import { buildPendingValidationDm, buildPendingValidationNotice } from "../services/match-notices";
+import { canUseMatchAction } from "../services/match-permissions";
 import { autoValidatePendingMatchesForGame } from "../services/match-review";
 import { BLOCKING_MATCH_STATUSES } from "../services/matches";
 import {
@@ -4222,12 +4223,9 @@ async function showMatchReasonModal(
       return;
     }
 
-    const isAdmin = interaction.member && isAdminMember(interaction.member, config);
-    const isPlayer =
-      interaction.user.id === match.player1.discordId ||
-      interaction.user.id === match.player2.discordId;
+    const isAdmin = Boolean(interaction.member && isAdminMember(interaction.member, config));
 
-    if (!isAdmin && !isPlayer) {
+    if (!canUseMatchAction("cancel", isAdmin, interaction.user.id, match)) {
       await replyEphemeral(interaction, {
         content: "⛔ Vous ne pouvez pas annuler cette partie."
       });
@@ -4266,12 +4264,9 @@ async function canCancelMatch(
     player2: { discordId: string };
   }
 ): Promise<boolean> {
-  const isAdmin = interaction.member && isAdminMember(interaction.member, config);
-  const isPlayer =
-    interaction.user.id === match.player1.discordId ||
-    interaction.user.id === match.player2.discordId;
+  const isAdmin = Boolean(interaction.member && isAdminMember(interaction.member, config));
 
-  if (!isAdmin && !isPlayer) {
+  if (!canUseMatchAction("cancel", isAdmin, interaction.user.id, match)) {
     await replyEphemeral(interaction, {
       content: "⛔ Vous ne pouvez pas annuler cette partie."
     });
