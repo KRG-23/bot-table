@@ -336,7 +336,18 @@ async function resolveMemberByExactName(message: Message, input: string): Promis
       .some((name) => normalizeDiscordName(name ?? "") === normalizedQuery)
   );
 
-  return exact?.size === 1 ? (exact.first()?.id ?? null) : null;
+  if (exact?.size === 1) {
+    return exact.first()?.id ?? null;
+  }
+
+  const fetched = await message.guild.members.fetch().catch(() => null);
+  const fetchedExact = fetched?.filter((member) =>
+    [member.displayName, member.user.username, member.user.globalName]
+      .filter(Boolean)
+      .some((name) => normalizeDiscordName(name ?? "") === normalizedQuery)
+  );
+
+  return fetchedExact?.size === 1 ? (fetchedExact.first()?.id ?? null) : null;
 }
 
 function normalizeDiscordName(input: string): string {
