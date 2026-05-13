@@ -15,7 +15,7 @@ import { getGameTableCapacity } from "../services/table-capacity";
 import { formatFrenchDate, parseFrenchDayMonth } from "../utils/dates";
 
 const BASE_USAGE =
-  "Format attendu : @Munitorum @Joueur1 vs @Joueur2 [jeu]. Dans un fil de soirée, le jeu est déduit automatiquement.";
+  "Format attendu : @Munitorum @Joueur1 vs @Joueur2 [jeu]. Les joueurs doivent être une mention, un ID Discord ou un nom exact du serveur.";
 
 type ParsedMatch = {
   player1Id: string;
@@ -45,7 +45,7 @@ export async function handleMatchMessage(
     return;
   }
 
-  const parsed = parseMatchMessage(message.content, botId);
+  const parsed = await parseMatchMessage(message, botId);
   if (!parsed) {
     await message.reply(BASE_USAGE);
     return;
@@ -56,16 +56,16 @@ export async function handleMatchMessage(
     return;
   }
 
-  const nonBotMentions = message.mentions.users.filter((user) => user.id !== botId);
-  if (nonBotMentions.size !== 2) {
-    await message.reply("⛔ Merci de mentionner exactement deux joueurs.");
+  const extraMentionIds = message.mentions.users.filter(
+    (user) => ![botId, parsed.player1Id, parsed.player2Id].includes(user.id)
+  );
+  if (extraMentionIds.size > 0) {
+    await message.reply("⛔ Merci d'indiquer exactement deux joueurs.");
     return;
   }
 
   if (!config.allowBotPlayers) {
-    const botPlayers = [parsed.player1Id, parsed.player2Id]
-      .map((playerId) => message.mentions.users.get(playerId))
-      .filter((user) => user?.bot);
+    const botPlayers = await findBotPlayers(message, [parsed.player1Id, parsed.player2Id]);
 
     if (botPlayers.length > 0) {
       await message.reply(
@@ -246,40 +246,114 @@ function buildMatchActionRow(matchId: number) {
   };
 }
 
-function parseMatchMessage(content: string, botId: string): ParsedMatch | null {
-  const mentions = [...content.matchAll(/<@!?([0-9]+)>/g)].map((match) => ({
-    id: match[1],
-    index: match.index ?? 0,
-    end: (match.index ?? 0) + match[0].length
-  }));
+async function parseMatchMessage(message: Message, botId: string): Promise<ParsedMatch | null> {
+  const content = message.content;
+  const withoutBot = content.replace(new RegExp(`<@!?${botId}>`, "g"), " ").trim();
+  const separator = /\s+(?:vs|contre)\s+/i;
+  const separatorMatch = withoutBot.match(separator);
 
-  if (!mentions.some((mention) => mention.id === botId)) {
+  if (!separatorMatch || separatorMatch.index === undefined) {
     return null;
   }
 
-  const players = mentions.filter((mention) => mention.id !== botId);
-  const separator = /\b(?:vs|contre)\b/i;
+  const player1Input = withoutBot.slice(0, separatorMatch.index).trim();
+  const player2Input = withoutBot.slice(separatorMatch.index + separatorMatch[0].length).trim();
 
-  for (let index = 0; index < players.length - 1; index += 1) {
-    const player1 = players[index];
-    const player2 = players[index + 1];
-    const betweenPlayers = content.slice(player1.end, player2.index);
+  const player1Id = await resolvePlayerInput(message, player1Input);
+  const player2Id = await resolvePlayerInput(message, player2Input);
 
-    if (!separator.test(betweenPlayers)) {
-      continue;
-    }
-
-    const gameInput = content
-      .slice(player2.end)
-      .replace(new RegExp(`<@!?${botId}>`, "g"), "")
-      .trim();
-
-    return gameInput
-      ? { player1Id: player1.id, player2Id: player2.id, gameInput }
-      : { player1Id: player1.id, player2Id: player2.id };
+  if (player1Id && player2Id) {
+    return { player1Id, player2Id };
   }
 
-  return null;
+  const player2WithGame = await resolvePlayerWithGameInput(message, player2Input);
+  if (!player1Id || !player2WithGame) {
+    return null;
+  }
+
+  return {
+    player1Id,
+    player2Id: player2WithGame.playerId,
+    gameInput: player2WithGame.gameInput
+  };
+}
+
+async function resolvePlayerWithGameInput(
+  message: Message,
+  input: string
+): Promise<{ playerId: string; gameInput?: string } | null> {
+  const mentionMatch = input.match(/^<@!?([0-9]+)>\s*(.*)$/);
+  if (mentionMatch) {
+    const gameInput = mentionMatch[2].trim();
+    return gameInput ? { playerId: mentionMatch[1], gameInput } : { playerId: mentionMatch[1] };
+  }
+
+  const idMatch = input.match(/^([0-9]{17,20})\s*(.*)$/);
+  if (idMatch) {
+    const gameInput = idMatch[2].trim();
+    return gameInput ? { playerId: idMatch[1], gameInput } : { playerId: idMatch[1] };
+  }
+
+  const playerId = await resolvePlayerInput(message, input);
+  return playerId ? { playerId } : null;
+}
+
+async function resolvePlayerInput(message: Message, input: string): Promise<string | null> {
+  const trimmed = input.trim();
+  const mentionMatch = trimmed.match(/^<@!?([0-9]+)>$/);
+  if (mentionMatch) {
+    return mentionMatch[1];
+  }
+
+  if (/^[0-9]{17,20}$/.test(trimmed)) {
+    return trimmed;
+  }
+
+  return resolveMemberByExactName(message, trimmed);
+}
+
+async function resolveMemberByExactName(message: Message, input: string): Promise<string | null> {
+  const query = input.replace(/^@/, "").trim();
+  if (!query || !message.guild) {
+    return null;
+  }
+
+  const normalizedQuery = normalizeDiscordName(query);
+  const cached = message.guild.members.cache.filter((member) =>
+    [member.displayName, member.user.username, member.user.globalName]
+      .filter(Boolean)
+      .some((name) => normalizeDiscordName(name ?? "") === normalizedQuery)
+  );
+
+  if (cached.size === 1) {
+    return cached.first()?.id ?? null;
+  }
+
+  const searched = await message.guild.members.search({ query, limit: 10 }).catch(() => null);
+  const exact = searched?.filter((member) =>
+    [member.displayName, member.user.username, member.user.globalName]
+      .filter(Boolean)
+      .some((name) => normalizeDiscordName(name ?? "") === normalizedQuery)
+  );
+
+  return exact?.size === 1 ? (exact.first()?.id ?? null) : null;
+}
+
+function normalizeDiscordName(input: string): string {
+  return input
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+async function findBotPlayers(message: Message, playerIds: string[]) {
+  const users = await Promise.all(
+    playerIds.map((playerId) => message.client.users.fetch(playerId).catch(() => null))
+  );
+
+  return users.filter((user) => user?.bot);
 }
 
 async function resolveMessageGame(
@@ -349,8 +423,12 @@ async function upsertUser(
   discordId: string,
   message: Message
 ) {
-  const member = message.mentions.members?.get(discordId);
-  const user = message.mentions.users.get(discordId);
+  const member =
+    message.mentions.members?.get(discordId) ??
+    (await message.guild?.members.fetch(discordId).catch(() => null));
+  const user =
+    message.mentions.users.get(discordId) ??
+    (await message.client.users.fetch(discordId).catch(() => null));
   const displayName = member?.displayName ?? user?.username ?? null;
 
   return prisma.user.upsert({
