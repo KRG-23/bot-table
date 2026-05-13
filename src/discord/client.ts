@@ -2,6 +2,7 @@ import { Client, GatewayIntentBits, Partials } from "discord.js";
 import type { Logger } from "pino";
 
 import type { AppConfig } from "../config";
+import { incrementMetric } from "../services/metrics";
 import { startSchedulers } from "../services/scheduler";
 
 import {
@@ -39,7 +40,10 @@ export function createClient(config: AppConfig, logger: Logger): Client {
 
   client.on("interactionCreate", async (interaction) => {
     const ageMs = Date.now() - interaction.createdTimestamp;
+    incrementMetric("discordInteractions");
+
     if (ageMs > 2000) {
+      incrementMetric("discordLateInteractions");
       logger.warn({ ageMs, type: interaction.type }, "Interaction received late");
     }
 
@@ -63,17 +67,20 @@ export function createClient(config: AppConfig, logger: Logger): Client {
         await handleSelectMenuInteraction(interaction, config, logger);
       }
     } catch (err) {
+      incrementMetric("discordInteractionErrors");
       logger.error({ err, ageMs }, "Failed to handle interaction");
     }
   });
 
   client.on("messageCreate", (message) => {
     handleMatchMessage(message, config, logger).catch((err) => {
+      incrementMetric("discordMessageErrors");
       logger.error({ err }, "Failed to handle match message");
     });
   });
 
   client.on("error", (err) => {
+    incrementMetric("discordClientErrors");
     logger.error({ err }, "Discord client error");
   });
 

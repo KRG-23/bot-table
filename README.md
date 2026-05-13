@@ -67,6 +67,10 @@ npm run check
 
 This runs ESLint, TypeScript build, and the Node test suite.
 
+`/mu_health` also returns basic in-memory metrics since the last bot restart:
+Discord interactions/errors, match lifecycle counters, auto-validations, DM failures,
+and thread notification failures.
+
 ### TLS note (DEV only)
 
 If your network uses TLS inspection (self-signed certs), local dev may fail with

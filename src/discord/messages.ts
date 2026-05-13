@@ -11,6 +11,7 @@ import { getAutomationSettings } from "../services/automation-settings";
 import { listActiveGames, resolveGameFromInput } from "../services/games";
 import { buildPendingValidationDm, buildPendingValidationNotice } from "../services/match-notices";
 import { BLOCKING_MATCH_STATUSES } from "../services/matches";
+import { incrementMetric } from "../services/metrics";
 import { getSlotDays, formatSlotDays, isSlotDay } from "../services/slots";
 import { getGameTableCapacity } from "../services/table-capacity";
 import { formatFrenchDate, parseFrenchDayMonth } from "../utils/dates";
@@ -188,6 +189,7 @@ export async function handleMatchMessage(
   });
 
   if (duplicate) {
+    incrementMetric("matchDuplicateRefused");
     logger.info(
       {
         source: "thread_message",
@@ -215,6 +217,7 @@ export async function handleMatchMessage(
     }
   });
 
+  incrementMetric("matchCreated");
   logger.info(
     {
       source: "thread_message",
@@ -500,6 +503,7 @@ async function sendDmsAndStoreNotifications(
         await user.send(dmContent);
         return { success: true };
       } catch (err) {
+        incrementMetric("dmFailures");
         logger.warn({ err, userId: discordId }, "Failed to send DM");
         return { success: false, error: err instanceof Error ? err.message : String(err) };
       }

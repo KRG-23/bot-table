@@ -7,6 +7,8 @@ import type { AppConfig } from "../config";
 import { getPrisma } from "../db";
 import { formatFrenchDate } from "../utils/dates";
 
+import { incrementMetric } from "./metrics";
+
 type FinalNotificationMatch = {
   id: number;
   player1: { discordId: string };
@@ -128,6 +130,7 @@ async function notifyPlayers(
         await user.send(content);
         return { success: true };
       } catch (err) {
+        incrementMetric("dmFailures");
         logger.warn({ err, userId: discordId }, "Failed to send final notification DM");
         return { success: false, error: err instanceof Error ? err.message : String(err) };
       }

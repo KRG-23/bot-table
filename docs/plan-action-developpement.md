@@ -74,7 +74,7 @@
 
 - [x] Logs structurés actions critiques
 - [ ] Rotation des logs
-- [ ] Métriques basiques (parties, erreurs Discord)
+- [x] Métriques basiques (parties, erreurs Discord)
 - [x] Tests unitaires règles métier
 - [x] Tests parsing messages
 - [x] Tests permissions

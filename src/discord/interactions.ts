@@ -51,6 +51,7 @@ import { buildPendingValidationDm, buildPendingValidationNotice } from "../servi
 import { canUseMatchAction } from "../services/match-permissions";
 import { autoValidatePendingMatchesForGame } from "../services/match-review";
 import { BLOCKING_MATCH_STATUSES } from "../services/matches";
+import { formatMetricsSnapshot, incrementMetric } from "../services/metrics";
 import {
   buildMonthlySlotGenerationSummary,
   generateCurrentMonthSlots
@@ -1078,7 +1079,7 @@ export async function handleModalSubmit(
 
 async function handleHealth(interaction: EphemeralInteraction): Promise<void> {
   await replyEphemeral(interaction, {
-    content: "✅ Munitorum opérationnel.",
+    content: ["✅ Munitorum opérationnel.", "", formatMetricsSnapshot()].join("\n"),
     components: [buildHealthRow()]
   });
 }
@@ -2894,6 +2895,7 @@ async function handleMatchCreate(
   });
 
   if (duplicate) {
+    incrementMetric("matchDuplicateRefused");
     logger.info(
       {
         source: "interaction",
@@ -2921,6 +2923,7 @@ async function handleMatchCreate(
     }
   });
 
+  incrementMetric("matchCreated");
   logger.info(
     {
       source: "interaction",
@@ -4017,6 +4020,7 @@ async function performMatchValidate(
   }
 
   if (!(await ensureAdmin(interaction, config))) {
+    incrementMetric("matchActionDenied");
     logger.warn(
       { action: "validate", matchId, actorId: interaction.user.id },
       "Match action denied"
@@ -4064,6 +4068,7 @@ async function performMatchValidate(
     data: { status: MatchStatus.VALIDE }
   });
 
+  incrementMetric("matchValidated");
   logger.info(
     {
       action: "validate",
@@ -4105,6 +4110,7 @@ async function performMatchRefuse(
   }
 
   if (!(await ensureAdmin(interaction, config))) {
+    incrementMetric("matchActionDenied");
     logger.warn({ action: "refuse", matchId, actorId: interaction.user.id }, "Match action denied");
     return;
   }
@@ -4134,6 +4140,7 @@ async function performMatchRefuse(
     data: { status: MatchStatus.REFUSE }
   });
 
+  incrementMetric("matchRefused");
   logger.info(
     {
       action: "refuse",
@@ -4205,6 +4212,7 @@ async function performMatchCancel(
     data: { status: MatchStatus.ANNULE }
   });
 
+  incrementMetric("matchCancelled");
   const summary = buildMatchSummary(match, config);
   const reasonSuffix = reason ? `\nRaison : ${reason}` : "";
 
@@ -4224,6 +4232,9 @@ async function performMatchCancel(
     match.eventId,
     match.gameId
   );
+  if (autoValidation.autoValidated > 0) {
+    incrementMetric("matchAutoValidated", autoValidation.autoValidated);
+  }
   const autoValidationLines =
     autoValidation.autoValidated > 0
       ? [
@@ -4286,6 +4297,7 @@ async function showMatchReasonModal(
 
   if (action === "refuse") {
     if (!interaction.member || !isAdminMember(interaction.member, config)) {
+      incrementMetric("matchActionDenied");
       logger.warn(
         { action: "refuse", matchId, actorId: interaction.user.id },
         "Match action denied"
@@ -4312,6 +4324,7 @@ async function showMatchReasonModal(
     const isAdmin = Boolean(interaction.member && isAdminMember(interaction.member, config));
 
     if (!canUseMatchAction("cancel", isAdmin, interaction.user.id, match)) {
+      incrementMetric("matchActionDenied");
       logger.warn(
         { action: "cancel", matchId, actorId: interaction.user.id },
         "Match action denied"
@@ -4359,6 +4372,7 @@ async function canCancelMatch(
   const isAdmin = Boolean(interaction.member && isAdminMember(interaction.member, config));
 
   if (!canUseMatchAction("cancel", isAdmin, interaction.user.id, match)) {
+    incrementMetric("matchActionDenied");
     logger.warn(
       { action: "cancel", matchId: match.id, actorId: interaction.user.id },
       "Match action denied"
@@ -4392,6 +4406,7 @@ async function notifyMatchStatus(
         await user.send(dmMessage);
         return { success: true };
       } catch (err) {
+        incrementMetric("dmFailures");
         logger.warn({ err, userId: discordId }, "Failed to send DM");
         return { success: false, error: err instanceof Error ? err.message : String(err) };
       }
@@ -4419,6 +4434,7 @@ async function notifyMatchStatus(
         data: { matchId: match.id, type: NotificationType.THREAD, success: true }
       });
     } catch (err) {
+      incrementMetric("threadNotificationFailures");
       logger.warn({ err }, "Failed to send thread notification");
       await prisma.notification.create({
         data: {
@@ -4450,6 +4466,7 @@ async function notifyMatchCreated(
         await user.send(dmContent);
         return { success: true };
       } catch (err) {
+        incrementMetric("dmFailures");
         logger.warn({ err, userId: discordId }, "Failed to send DM");
         return { success: false, error: err instanceof Error ? err.message : String(err) };
       }

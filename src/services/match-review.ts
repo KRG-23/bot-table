@@ -9,6 +9,7 @@ import { formatFrenchDate } from "../utils/dates";
 
 import { getAppSettings } from "./app-settings";
 import { BLOCKING_MATCH_STATUSES } from "./matches";
+import { incrementMetric } from "./metrics";
 import { getEventTableCapacity, getGameTableCapacity } from "./table-capacity";
 
 type ReplyComponents = InteractionReplyOptions["components"];
@@ -153,6 +154,7 @@ export async function reviewUpcomingMatches(
           pending.map((match) => notifyAutoValidatedMatch(client, config, logger, match))
         );
 
+        incrementMetric("matchAutoValidated", pending.length);
         result.autoValidated += pending.length;
         result.lines.push(
           `• ${formatFrenchDate(dayjs(event.date).tz(config.timezone))} — ${gameLabel} : ${
@@ -265,6 +267,7 @@ async function notifyAutoValidatedMatch(
         await user.send(dmMessage);
         return { success: true };
       } catch (err) {
+        incrementMetric("dmFailures");
         logger.warn({ err, userId: discordId }, "Failed to send auto-validation DM");
         return { success: false, error: err instanceof Error ? err.message : String(err) };
       }
@@ -308,6 +311,7 @@ async function notifyAutoValidatedMatch(
       data: { matchId: match.id, type: NotificationType.THREAD, success: true }
     });
   } catch (err) {
+    incrementMetric("threadNotificationFailures");
     logger.warn({ err, matchId: match.id }, "Failed to send auto-validation thread message");
     await prisma.notification.create({
       data: {
