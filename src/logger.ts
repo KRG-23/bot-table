@@ -4,7 +4,7 @@ export function createLogger(level: string) {
   return pino({
     level,
     base: {
-      service: "munitorum"
+      service: "otto"
     }
   });
 }

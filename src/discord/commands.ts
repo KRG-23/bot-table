@@ -2,17 +2,17 @@ import { ApplicationCommandOptionType, ApplicationCommandType } from "discord.js
 
 export const commands = [
   {
-    name: "mu_health",
+    name: "ot_health",
     description: "Vérifie l'état du bot",
     type: ApplicationCommandType.ChatInput
   },
   {
-    name: "mu_config",
+    name: "ot_config",
     description: "Ouvre le menu de configuration",
     type: ApplicationCommandType.ChatInput
   },
   {
-    name: "mu_tables",
+    name: "ot_tables",
     description: "Gérer le nombre de tables",
     type: ApplicationCommandType.ChatInput,
     options: [
@@ -58,7 +58,7 @@ export const commands = [
     ]
   },
   {
-    name: "mu_slots",
+    name: "ot_slots",
     description: "Générer les créneaux du mois",
     type: ApplicationCommandType.ChatInput,
     options: [
@@ -101,7 +101,7 @@ export const commands = [
     ]
   },
   {
-    name: "mu_match",
+    name: "ot_match",
     description: "Gérer une partie",
     type: ApplicationCommandType.ChatInput,
     options: [
@@ -231,7 +231,7 @@ export const commands = [
     ]
   },
   {
-    name: "mu_games",
+    name: "ot_games",
     description: "Gérer les jeux et canaux",
     type: ApplicationCommandType.ChatInput,
     options: [

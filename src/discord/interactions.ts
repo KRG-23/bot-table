@@ -137,17 +137,17 @@ export async function handleInteraction(
   config: AppConfig,
   logger: Logger
 ): Promise<void> {
-  if (interaction.commandName === "mu_health") {
+  if (interaction.commandName === "ot_health") {
     await handleHealth(interaction);
     return;
   }
 
-  if (interaction.commandName === "mu_config") {
+  if (interaction.commandName === "ot_config") {
     await handleConfigMenu(interaction, config, logger);
     return;
   }
 
-  if (interaction.commandName === "mu_tables") {
+  if (interaction.commandName === "ot_tables") {
     if (!interaction.inGuild()) {
       await replyEphemeral(interaction, { content: "Commande réservée au serveur." });
       return;
@@ -188,7 +188,7 @@ export async function handleInteraction(
     }
   }
 
-  if (interaction.commandName === "mu_slots") {
+  if (interaction.commandName === "ot_slots") {
     if (!interaction.inGuild()) {
       await replyEphemeral(interaction, { content: "Commande réservée au serveur." });
       return;
@@ -233,7 +233,7 @@ export async function handleInteraction(
     }
   }
 
-  if (interaction.commandName === "mu_games") {
+  if (interaction.commandName === "ot_games") {
     if (!interaction.inGuild()) {
       await replyEphemeral(interaction, { content: "Commande réservée au serveur." });
       return;
@@ -291,7 +291,7 @@ export async function handleInteraction(
     }
   }
 
-  if (interaction.commandName === "mu_match") {
+  if (interaction.commandName === "ot_match") {
     if (!interaction.inGuild()) {
       await replyEphemeral(interaction, { content: "Commande réservée au serveur." });
       return;
@@ -367,28 +367,28 @@ export async function handleButtonInteraction(
   config: AppConfig,
   logger: Logger
 ): Promise<void> {
-  if (interaction.customId === "mu_health:check") {
+  if (interaction.customId === "ot_health:check") {
     await handleHealth(interaction);
     return;
   }
 
-  if (interaction.customId === "mu_config:show") {
+  if (interaction.customId === "ot_config:show") {
     await handleConfigMenu(interaction, config, logger);
     return;
   }
 
-  if (interaction.customId === "mu_config:home") {
+  if (interaction.customId === "ot_config:home") {
     const payload = await buildConfigCategoryResponse("home", config, logger);
     await interaction.update(toUpdatePayload(payload));
     return;
   }
 
-  if (interaction.customId.startsWith("mu_lang:set:")) {
+  if (interaction.customId.startsWith("ot_lang:set:")) {
     if (!(await ensureAdmin(interaction, config))) {
       return;
     }
 
-    const language = normalizeLanguage(interaction.customId.replace("mu_lang:set:", ""));
+    const language = normalizeLanguage(interaction.customId.replace("ot_lang:set:", ""));
     const prisma = getPrisma();
 
     let deferred = false;
@@ -420,88 +420,88 @@ export async function handleButtonInteraction(
     return;
   }
 
-  if (interaction.customId === "mu_match:panel") {
+  if (interaction.customId === "ot_match:panel") {
     const panel = buildMatchPanel();
     await replyEphemeral(interaction, panel);
     return;
   }
 
-  if (interaction.customId === "mu_match:create") {
+  if (interaction.customId === "ot_match:create") {
     await showMatchCreateModal(interaction);
     return;
   }
 
-  if (interaction.customId === "mu_match:validate_request") {
+  if (interaction.customId === "ot_match:validate_request") {
     await showMatchActionModal(interaction, config, "validate");
     return;
   }
 
-  if (interaction.customId === "mu_match:refuse_request") {
+  if (interaction.customId === "ot_match:refuse_request") {
     await showMatchActionModal(interaction, config, "refuse");
     return;
   }
 
-  if (interaction.customId === "mu_match:cancel_request") {
+  if (interaction.customId === "ot_match:cancel_request") {
     await showMatchActionModal(interaction, config, "cancel");
     return;
   }
 
-  if (interaction.customId === "mu_tables:set") {
+  if (interaction.customId === "ot_tables:set") {
     await showTablesDateSelect(interaction, config, "set");
     return;
   }
 
-  if (interaction.customId === "mu_tables:show") {
+  if (interaction.customId === "ot_tables:show") {
     await showTablesDateSelect(interaction, config, "show");
     return;
   }
 
-  if (interaction.customId.startsWith("mu_tables:set_game:")) {
+  if (interaction.customId.startsWith("ot_tables:set_game:")) {
     await showTablesGameModal(interaction, config);
     return;
   }
 
-  if (interaction.customId.startsWith("mu_tables:apply_defaults:")) {
+  if (interaction.customId.startsWith("ot_tables:apply_defaults:")) {
     await handleTablesApplyDefaults(interaction, config, logger);
     return;
   }
 
-  if (interaction.customId.startsWith("mu_thread:status:")) {
+  if (interaction.customId.startsWith("ot_thread:status:")) {
     await handleThreadStatus(interaction, config);
     return;
   }
 
-  if (interaction.customId.startsWith("mu_thread:tables:")) {
+  if (interaction.customId.startsWith("ot_thread:tables:")) {
     await showThreadTablesModal(interaction, config);
     return;
   }
 
-  if (interaction.customId.startsWith("mu_thread:validate:")) {
+  if (interaction.customId.startsWith("ot_thread:validate:")) {
     await handleThreadValidatePossible(interaction, config, logger);
     return;
   }
 
-  if (interaction.customId === "mu_slots:delete_month") {
+  if (interaction.customId === "ot_slots:delete_month") {
     await handleDeleteMonthRequest(interaction, config);
     return;
   }
 
-  if (interaction.customId === "mu_slots:delete_date") {
+  if (interaction.customId === "ot_slots:delete_date") {
     await showDeleteDateModal(interaction, config);
     return;
   }
 
-  if (interaction.customId === "mu_slots:configure_days") {
+  if (interaction.customId === "ot_slots:configure_days") {
     await showSlotDaysModal(interaction, config);
     return;
   }
 
-  if (interaction.customId === "mu_automation:configure") {
+  if (interaction.customId === "ot_automation:configure") {
     await showAutomationSettingsModal(interaction, config);
     return;
   }
 
-  if (interaction.customId === "mu_automation:reset_defaults") {
+  if (interaction.customId === "ot_automation:reset_defaults") {
     if (!(await ensureAdmin(interaction, config))) {
       return;
     }
@@ -513,7 +513,7 @@ export async function handleButtonInteraction(
     return;
   }
 
-  if (interaction.customId.startsWith("mu_notifications:mention_thread:")) {
+  if (interaction.customId.startsWith("ot_notifications:mention_thread:")) {
     if (!(await ensureAdmin(interaction, config))) {
       return;
     }
@@ -526,7 +526,7 @@ export async function handleButtonInteraction(
     return;
   }
 
-  if (interaction.customId === "mu_games:configure") {
+  if (interaction.customId === "ot_games:configure") {
     if (!(await ensureAdmin(interaction, config))) {
       return;
     }
@@ -536,7 +536,7 @@ export async function handleButtonInteraction(
     return;
   }
 
-  if (interaction.customId === "mu_games:add") {
+  if (interaction.customId === "ot_games:add") {
     if (!(await ensureAdmin(interaction, config))) {
       return;
     }
@@ -545,7 +545,7 @@ export async function handleButtonInteraction(
     return;
   }
 
-  if (interaction.customId.startsWith("mu_games:default_tables:")) {
+  if (interaction.customId.startsWith("ot_games:default_tables:")) {
     if (!(await ensureAdmin(interaction, config))) {
       return;
     }
@@ -554,12 +554,12 @@ export async function handleButtonInteraction(
     return;
   }
 
-  if (interaction.customId.startsWith("mu_games:save:")) {
+  if (interaction.customId.startsWith("ot_games:save:")) {
     if (!(await ensureAdmin(interaction, config))) {
       return;
     }
 
-    const [gameIdStr, channelId] = interaction.customId.replace("mu_games:save:", "").split(":");
+    const [gameIdStr, channelId] = interaction.customId.replace("ot_games:save:", "").split(":");
     const gameId = Number(gameIdStr);
 
     if (!Number.isInteger(gameId) || !channelId) {
@@ -575,12 +575,12 @@ export async function handleButtonInteraction(
     return;
   }
 
-  if (interaction.customId.startsWith("mu_games:disable:")) {
+  if (interaction.customId.startsWith("ot_games:disable:")) {
     if (!(await ensureAdmin(interaction, config))) {
       return;
     }
 
-    const gameId = Number(interaction.customId.replace("mu_games:disable:", ""));
+    const gameId = Number(interaction.customId.replace("ot_games:disable:", ""));
     if (!Number.isInteger(gameId)) {
       await replyEphemeral(interaction, { content: "❌ Jeu invalide." });
       return;
@@ -595,12 +595,12 @@ export async function handleButtonInteraction(
     return;
   }
 
-  if (interaction.customId.startsWith("mu_games:enable:")) {
+  if (interaction.customId.startsWith("ot_games:enable:")) {
     if (!(await ensureAdmin(interaction, config))) {
       return;
     }
 
-    const gameId = Number(interaction.customId.replace("mu_games:enable:", ""));
+    const gameId = Number(interaction.customId.replace("ot_games:enable:", ""));
     if (!Number.isInteger(gameId)) {
       await replyEphemeral(interaction, { content: "❌ Jeu invalide." });
       return;
@@ -615,13 +615,13 @@ export async function handleButtonInteraction(
     return;
   }
 
-  if (interaction.customId === "mu_slots:confirm_delete_month") {
+  if (interaction.customId === "ot_slots:confirm_delete_month") {
     await handleDeleteMonthConfirm(interaction, config, logger);
     return;
   }
 
-  if (interaction.customId.startsWith("mu_slots:confirm_delete_date:")) {
-    const dateStr = interaction.customId.replace("mu_slots:confirm_delete_date:", "");
+  if (interaction.customId.startsWith("ot_slots:confirm_delete_date:")) {
+    const dateStr = interaction.customId.replace("ot_slots:confirm_delete_date:", "");
     const parsedDate = dayjs.tz(dateStr, "YYYY-MM-DD", config.timezone).startOf("day");
     if (!parsedDate.isValid()) {
       await replyEphemeral(interaction, { content: "❌ Date invalide." });
@@ -631,7 +631,7 @@ export async function handleButtonInteraction(
     return;
   }
 
-  if (interaction.customId === "mu_slots:cancel_delete") {
+  if (interaction.customId === "ot_slots:cancel_delete") {
     await replyEphemeral(interaction, {
       content: "❎ Suppression annulée.",
       components: [buildBackToConfigRow()]
@@ -639,30 +639,30 @@ export async function handleButtonInteraction(
     return;
   }
 
-  if (interaction.customId === "mu_slots:generate_current_month") {
+  if (interaction.customId === "ot_slots:generate_current_month") {
     await handleGenerateSlots(interaction, config, logger);
     return;
   }
 
-  if (interaction.customId.startsWith("mu_match:validate:")) {
-    const matchId = Number(interaction.customId.replace("mu_match:validate:", ""));
+  if (interaction.customId.startsWith("ot_match:validate:")) {
+    const matchId = Number(interaction.customId.replace("ot_match:validate:", ""));
     await handleMatchValidate(interaction, config, logger, matchId);
     return;
   }
 
-  if (interaction.customId.startsWith("mu_match:refuse:")) {
-    const matchId = Number(interaction.customId.replace("mu_match:refuse:", ""));
+  if (interaction.customId.startsWith("ot_match:refuse:")) {
+    const matchId = Number(interaction.customId.replace("ot_match:refuse:", ""));
     await showMatchReasonModal(interaction, config, logger, matchId, "refuse");
     return;
   }
 
-  if (interaction.customId.startsWith("mu_match:cancel:")) {
-    const matchId = Number(interaction.customId.replace("mu_match:cancel:", ""));
+  if (interaction.customId.startsWith("ot_match:cancel:")) {
+    const matchId = Number(interaction.customId.replace("ot_match:cancel:", ""));
     await showMatchReasonModal(interaction, config, logger, matchId, "cancel");
     return;
   }
 
-  if (interaction.customId.startsWith("mu_tables:quick_show:")) {
+  if (interaction.customId.startsWith("ot_tables:quick_show:")) {
     if (!interaction.inGuild()) {
       await replyEphemeral(interaction, { content: "Commande réservée au serveur." });
       return;
@@ -675,7 +675,7 @@ export async function handleButtonInteraction(
       return;
     }
 
-    const dateStr = interaction.customId.replace("mu_tables:quick_show:", "");
+    const dateStr = interaction.customId.replace("ot_tables:quick_show:", "");
     const parsedDate = dayjs.tz(dateStr, "YYYY-MM-DD", config.timezone);
 
     if (!parsedDate.isValid()) {
@@ -693,7 +693,7 @@ export async function handleSelectMenuInteraction(
   config: AppConfig,
   logger: Logger
 ): Promise<void> {
-  if (interaction.customId === "mu_config:menu") {
+  if (interaction.customId === "ot_config:menu") {
     const ageMs = Date.now() - interaction.createdTimestamp;
     if (ageMs > 2500) {
       return;
@@ -716,7 +716,7 @@ export async function handleSelectMenuInteraction(
     return;
   }
 
-  if (interaction.customId === "mu_games:select") {
+  if (interaction.customId === "ot_games:select") {
     if (!(await ensureAdmin(interaction, config))) {
       return;
     }
@@ -734,12 +734,12 @@ export async function handleSelectMenuInteraction(
     return;
   }
 
-  if (interaction.customId.startsWith("mu_games:channel:")) {
+  if (interaction.customId.startsWith("ot_games:channel:")) {
     if (!(await ensureAdmin(interaction, config))) {
       return;
     }
 
-    const gameIdStr = interaction.customId.replace("mu_games:channel:", "");
+    const gameIdStr = interaction.customId.replace("ot_games:channel:", "");
     const gameId = Number(gameIdStr);
     const channelId = interaction.values[0];
 
@@ -756,7 +756,7 @@ export async function handleSelectMenuInteraction(
     return;
   }
 
-  if (interaction.customId.startsWith("mu_tables:date_select:")) {
+  if (interaction.customId.startsWith("ot_tables:date_select:")) {
     if (!(await ensureAdmin(interaction, config))) {
       return;
     }
@@ -779,12 +779,12 @@ export async function handleSelectMenuInteraction(
     return;
   }
 
-  if (interaction.customId.startsWith("mu_tables:game_select:")) {
+  if (interaction.customId.startsWith("ot_tables:game_select:")) {
     if (!(await ensureAdmin(interaction, config))) {
       return;
     }
 
-    const dateKey = interaction.customId.replace("mu_tables:game_select:", "");
+    const dateKey = interaction.customId.replace("ot_tables:game_select:", "");
     const parsedDate = parseTableDateKey(dateKey, config.timezone);
     const selectedGameId = Number(interaction.values[0]);
 
@@ -808,7 +808,7 @@ export async function handleModalSubmit(
     return;
   }
 
-  if (interaction.customId === "mu_tables:set_modal") {
+  if (interaction.customId === "ot_tables:set_modal") {
     if (!interaction.member || !isAdminMember(interaction.member, config)) {
       await replyEphemeral(interaction, {
         content: "⛔ Cette commande est réservée aux administrateurs."
@@ -831,12 +831,12 @@ export async function handleModalSubmit(
     return;
   }
 
-  if (interaction.customId.startsWith("mu_tables:set_game_modal:")) {
+  if (interaction.customId.startsWith("ot_tables:set_game_modal:")) {
     await handleTablesGameModal(interaction, config, logger);
     return;
   }
 
-  if (interaction.customId === "mu_tables:show_modal") {
+  if (interaction.customId === "ot_tables:show_modal") {
     if (!interaction.member || !isAdminMember(interaction.member, config)) {
       await replyEphemeral(interaction, {
         content: "⛔ Cette commande est réservée aux administrateurs."
@@ -858,12 +858,12 @@ export async function handleModalSubmit(
     return;
   }
 
-  if (interaction.customId.startsWith("mu_thread:tables_modal:")) {
+  if (interaction.customId.startsWith("ot_thread:tables_modal:")) {
     await handleThreadTablesModal(interaction, config, logger);
     return;
   }
 
-  if (interaction.customId === "mu_slots:delete_date_modal") {
+  if (interaction.customId === "ot_slots:delete_date_modal") {
     if (!interaction.member || !isAdminMember(interaction.member, config)) {
       await replyEphemeral(interaction, {
         content: "⛔ Cette commande est réservée aux administrateurs."
@@ -884,7 +884,7 @@ export async function handleModalSubmit(
     await handleDeleteDateRequest(interaction, config, parsedDate.startOf("day"));
   }
 
-  if (interaction.customId === "mu_slots:configure_days_modal") {
+  if (interaction.customId === "ot_slots:configure_days_modal") {
     if (!interaction.member || !isAdminMember(interaction.member, config)) {
       await replyEphemeral(interaction, {
         content: "⛔ Cette commande est réservée aux administrateurs."
@@ -897,7 +897,7 @@ export async function handleModalSubmit(
     return;
   }
 
-  if (interaction.customId === "mu_automation:configure_modal") {
+  if (interaction.customId === "ot_automation:configure_modal") {
     if (!interaction.member || !isAdminMember(interaction.member, config)) {
       await replyEphemeral(interaction, {
         content: "⛔ Cette commande est réservée aux administrateurs."
@@ -909,7 +909,7 @@ export async function handleModalSubmit(
     return;
   }
 
-  if (interaction.customId === "mu_games:add_modal") {
+  if (interaction.customId === "ot_games:add_modal") {
     if (!interaction.member || !isAdminMember(interaction.member, config)) {
       await replyEphemeral(interaction, {
         content: "⛔ Cette commande est réservée aux administrateurs."
@@ -936,7 +936,7 @@ export async function handleModalSubmit(
     return;
   }
 
-  if (interaction.customId.startsWith("mu_games:default_tables_modal:")) {
+  if (interaction.customId.startsWith("ot_games:default_tables_modal:")) {
     if (!interaction.member || !isAdminMember(interaction.member, config)) {
       await replyEphemeral(interaction, {
         content: "⛔ Cette commande est réservée aux administrateurs."
@@ -948,7 +948,7 @@ export async function handleModalSubmit(
     return;
   }
 
-  if (interaction.customId === "mu_match:create_modal") {
+  if (interaction.customId === "ot_match:create_modal") {
     const dateInput = interaction.fields.getTextInputValue("date");
     const player1Raw = interaction.fields.getTextInputValue("player1");
     const player2Raw = interaction.fields.getTextInputValue("player2");
@@ -973,7 +973,7 @@ export async function handleModalSubmit(
     return;
   }
 
-  if (interaction.customId === "mu_match:validate_request_modal") {
+  if (interaction.customId === "ot_match:validate_request_modal") {
     const dateInput = interaction.fields.getTextInputValue("date");
     const player1Raw = interaction.fields.getTextInputValue("player1");
     const player2Raw = interaction.fields.getTextInputValue("player2");
@@ -1002,7 +1002,7 @@ export async function handleModalSubmit(
     return;
   }
 
-  if (interaction.customId === "mu_match:refuse_request_modal") {
+  if (interaction.customId === "ot_match:refuse_request_modal") {
     const dateInput = interaction.fields.getTextInputValue("date");
     const player1Raw = interaction.fields.getTextInputValue("player1");
     const player2Raw = interaction.fields.getTextInputValue("player2");
@@ -1032,7 +1032,7 @@ export async function handleModalSubmit(
     return;
   }
 
-  if (interaction.customId === "mu_match:cancel_request_modal") {
+  if (interaction.customId === "ot_match:cancel_request_modal") {
     const dateInput = interaction.fields.getTextInputValue("date");
     const player1Raw = interaction.fields.getTextInputValue("player1");
     const player2Raw = interaction.fields.getTextInputValue("player2");
@@ -1062,15 +1062,15 @@ export async function handleModalSubmit(
     return;
   }
 
-  if (interaction.customId.startsWith("mu_match:refuse_modal:")) {
-    const matchId = Number(interaction.customId.replace("mu_match:refuse_modal:", ""));
+  if (interaction.customId.startsWith("ot_match:refuse_modal:")) {
+    const matchId = Number(interaction.customId.replace("ot_match:refuse_modal:", ""));
     const reason = interaction.fields.getTextInputValue("reason").trim();
     await performMatchRefuse(interaction, config, logger, matchId, reason);
     return;
   }
 
-  if (interaction.customId.startsWith("mu_match:cancel_modal:")) {
-    const matchId = Number(interaction.customId.replace("mu_match:cancel_modal:", ""));
+  if (interaction.customId.startsWith("ot_match:cancel_modal:")) {
+    const matchId = Number(interaction.customId.replace("ot_match:cancel_modal:", ""));
     const reason = interaction.fields.getTextInputValue("reason").trim();
     await performMatchCancel(interaction, config, logger, matchId, reason);
     return;
@@ -1079,7 +1079,7 @@ export async function handleModalSubmit(
 
 async function handleHealth(interaction: EphemeralInteraction): Promise<void> {
   await replyEphemeral(interaction, {
-    content: ["✅ Munitorum opérationnel.", "", formatMetricsSnapshot()].join("\n"),
+    content: ["✅ Otto opérationnel.", "", formatMetricsSnapshot()].join("\n"),
     components: [buildHealthRow()]
   });
 }
@@ -1211,7 +1211,7 @@ async function handleGamesList(interaction: EphemeralInteraction): Promise<void>
 
   if (orderedGames.length === 0) {
     await replyEphemeral(interaction, {
-      content: "Aucun jeu configuré. Utilise /mu_games add ou le menu /mu_config."
+      content: "Aucun jeu configuré. Utilise /ot_games add ou le menu /ot_config."
     });
     return;
   }
@@ -1326,7 +1326,7 @@ async function handleGamesSetDefaultTables(
 }
 
 async function handleGameDefaultTablesModal(interaction: ModalSubmitInteraction): Promise<void> {
-  const gameId = Number(interaction.customId.replace("mu_games:default_tables_modal:", ""));
+  const gameId = Number(interaction.customId.replace("ot_games:default_tables_modal:", ""));
   const count = Number(interaction.fields.getTextInputValue("count"));
 
   if (!Number.isInteger(gameId) || !Number.isInteger(count) || count < 0) {
@@ -1561,7 +1561,7 @@ function parseTableDateKey(dateKey: string, timezone: string): dayjs.Dayjs | nul
 type TablesDateAction = "set" | "show";
 
 function parseTablesDateAction(customId: string): TablesDateAction | null {
-  const action = customId.replace("mu_tables:date_select:", "");
+  const action = customId.replace("ot_tables:date_select:", "");
   return action === "set" || action === "show" ? action : null;
 }
 
@@ -1642,7 +1642,7 @@ function buildTablesDateSelectRow(
     components: [
       {
         type: 3,
-        custom_id: `mu_tables:date_select:${action}`,
+        custom_id: `ot_tables:date_select:${action}`,
         placeholder: "Choisir un créneau",
         min_values: 1,
         max_values: 1,
@@ -1735,7 +1735,7 @@ function buildTablesGameSelectRow(
     components: [
       {
         type: 3,
-        custom_id: `mu_tables:game_select:${dateKey}`,
+        custom_id: `ot_tables:game_select:${dateKey}`,
         placeholder: "Choisir un jeu",
         min_values: 1,
         max_values: 1,
@@ -1765,13 +1765,13 @@ function buildTablesGameActionRow(dateKey: string, gameId: number): ReplyCompone
     components: [
       {
         type: 2,
-        custom_id: `mu_tables:set_game:${dateKey}:${gameId}`,
+        custom_id: `ot_tables:set_game:${dateKey}:${gameId}`,
         label: "Saisir les tables",
         style: ButtonStyle.Primary
       },
       {
         type: 2,
-        custom_id: `mu_tables:apply_defaults:${dateKey}`,
+        custom_id: `ot_tables:apply_defaults:${dateKey}`,
         label: "Appliquer défauts",
         style: ButtonStyle.Secondary
       }
@@ -1787,7 +1787,7 @@ async function showTablesGameModal(
     return;
   }
 
-  const context = parseTablesGameContext(interaction.customId, "mu_tables:set_game:");
+  const context = parseTablesGameContext(interaction.customId, "ot_tables:set_game:");
   if (!context) {
     await replyEphemeral(interaction, { content: "❌ Contexte invalide." });
     return;
@@ -1813,7 +1813,7 @@ async function showTablesGameModal(
   const current = event ? await getGameTableCapacity(prisma, event, game.id) : 0;
   const defaultValue = current > 0 ? current : getDefaultGameTableCount(game);
   const modal = {
-    custom_id: `mu_tables:set_game_modal:${context.dateKey}:${game.id}`,
+    custom_id: `ot_tables:set_game_modal:${context.dateKey}:${game.id}`,
     title: `Tables ${game.label}`.slice(0, 45),
     components: [
       {
@@ -1845,7 +1845,7 @@ async function handleTablesGameModal(
     return;
   }
 
-  const context = parseTablesGameContext(interaction.customId, "mu_tables:set_game_modal:");
+  const context = parseTablesGameContext(interaction.customId, "ot_tables:set_game_modal:");
   const parsedDate = context ? parseTableDateKey(context.dateKey, config.timezone) : null;
   const count = Number(interaction.fields.getTextInputValue("count"));
 
@@ -1872,7 +1872,7 @@ async function handleTablesApplyDefaults(
     return;
   }
 
-  const dateKey = interaction.customId.replace("mu_tables:apply_defaults:", "");
+  const dateKey = interaction.customId.replace("ot_tables:apply_defaults:", "");
   const parsedDate = parseTableDateKey(dateKey, config.timezone);
   if (!parsedDate) {
     await replyEphemeral(interaction, { content: "❌ Date invalide." });
@@ -2175,7 +2175,7 @@ async function handleThreadStatus(
     return;
   }
 
-  const context = parseThreadAdminContext(interaction.customId, "mu_thread:status:");
+  const context = parseThreadAdminContext(interaction.customId, "ot_thread:status:");
   if (!context) {
     await replyEphemeral(interaction, { content: "❌ Contexte du fil invalide." });
     return;
@@ -2195,7 +2195,7 @@ async function showThreadTablesModal(
     return;
   }
 
-  const context = parseThreadAdminContext(interaction.customId, "mu_thread:tables:");
+  const context = parseThreadAdminContext(interaction.customId, "ot_thread:tables:");
   if (!context) {
     await replyEphemeral(interaction, { content: "❌ Contexte du fil invalide." });
     return;
@@ -2214,7 +2214,7 @@ async function showThreadTablesModal(
 
   const capacity = await getGameTableCapacity(prisma, event, game.id);
   const modal = {
-    custom_id: `mu_thread:tables_modal:${event.id}:${game.id}`,
+    custom_id: `ot_thread:tables_modal:${event.id}:${game.id}`,
     title: `Tables ${game.label}`.slice(0, 45),
     components: [
       {
@@ -2246,7 +2246,7 @@ async function handleThreadTablesModal(
     return;
   }
 
-  const context = parseThreadAdminContext(interaction.customId, "mu_thread:tables_modal:");
+  const context = parseThreadAdminContext(interaction.customId, "ot_thread:tables_modal:");
   if (!context) {
     await replyEphemeral(interaction, { content: "❌ Contexte du fil invalide." });
     return;
@@ -2312,7 +2312,7 @@ async function handleThreadValidatePossible(
     return;
   }
 
-  const context = parseThreadAdminContext(interaction.customId, "mu_thread:validate:");
+  const context = parseThreadAdminContext(interaction.customId, "ot_thread:validate:");
   if (!context) {
     await replyEphemeral(interaction, { content: "❌ Contexte du fil invalide." });
     return;
@@ -2444,7 +2444,7 @@ async function handleDeleteDateRequest(
       `Notifications supprimées : ${notifications}`,
       "Confirmer la suppression ?"
     ].join("\n"),
-    components: [buildConfirmRow(`mu_slots:confirm_delete_date:${date.format("YYYY-MM-DD")}`)]
+    components: [buildConfirmRow(`ot_slots:confirm_delete_date:${date.format("YYYY-MM-DD")}`)]
   });
 }
 
@@ -2492,7 +2492,7 @@ async function handleDeleteMonthRequest(
       `Notifications supprimées : ${notifications}`,
       "Confirmer la suppression ?"
     ].join("\n"),
-    components: [buildConfirmRow("mu_slots:confirm_delete_month")]
+    components: [buildConfirmRow("ot_slots:confirm_delete_month")]
   });
 }
 
@@ -2848,7 +2848,7 @@ async function handleMatchCreate(
     await interaction.editReply({
       content: `❌ Aucune soirée trouvée pour le ${formatFrenchDate(
         parsedDate
-      )}. Demande à un admin de saisir les tables via /mu_tables set.`
+      )}. Demande à un admin de saisir les tables via /ot_tables set.`
     });
     return;
   }
@@ -3105,7 +3105,7 @@ function buildHealthRow() {
     components: [
       {
         type: 2,
-        custom_id: "mu_health:check",
+        custom_id: "ot_health:check",
         label: "Vérifier à nouveau",
         style: ButtonStyle.Secondary
       }
@@ -3119,13 +3119,13 @@ function buildTablesRow() {
     components: [
       {
         type: 2,
-        custom_id: "mu_tables:set",
+        custom_id: "ot_tables:set",
         label: "Définir une soirée",
         style: ButtonStyle.Primary
       },
       {
         type: 2,
-        custom_id: "mu_tables:show",
+        custom_id: "ot_tables:show",
         label: "Voir une soirée",
         style: ButtonStyle.Secondary
       }
@@ -3139,13 +3139,13 @@ function buildSlotsRow() {
     components: [
       {
         type: 2,
-        custom_id: "mu_slots:generate_current_month",
+        custom_id: "ot_slots:generate_current_month",
         label: "Relancer la génération",
         style: ButtonStyle.Secondary
       },
       {
         type: 2,
-        custom_id: "mu_slots:delete_month",
+        custom_id: "ot_slots:delete_month",
         label: "Supprimer créneaux du mois",
         style: ButtonStyle.Danger
       }
@@ -3159,7 +3159,7 @@ function buildBackToConfigRow(): ReplyComponentRow {
     components: [
       {
         type: 2,
-        custom_id: "mu_config:show",
+        custom_id: "ot_config:show",
         label: "Retour au menu",
         style: ButtonStyle.Secondary
       }
@@ -3173,7 +3173,7 @@ function buildBackToHomeRow(): ReplyComponentRow {
     components: [
       {
         type: 2,
-        custom_id: "mu_config:home",
+        custom_id: "ot_config:home",
         label: "Retour à l'accueil",
         style: ButtonStyle.Secondary
       }
@@ -3198,7 +3198,7 @@ function buildConfigMenuSelect(selected?: ConfigCategory) {
     components: [
       {
         type: 3,
-        custom_id: "mu_config:menu",
+        custom_id: "ot_config:menu",
         placeholder: "Choisir une catégorie",
         min_values: 1,
         max_values: 1,
@@ -3223,14 +3223,14 @@ function buildLanguageRow(current: BotLanguage): ReplyComponentRow {
     components: [
       {
         type: 2,
-        custom_id: "mu_lang:set:fr",
+        custom_id: "ot_lang:set:fr",
         label: "Français",
         style: ButtonStyle.Primary,
         disabled: current === "fr"
       },
       {
         type: 2,
-        custom_id: "mu_lang:set:en",
+        custom_id: "ot_lang:set:en",
         label: "English",
         style: ButtonStyle.Secondary,
         disabled: current === "en"
@@ -3246,7 +3246,7 @@ function buildSlotsCategoryRows() {
       components: [
         {
           type: 2,
-          custom_id: "mu_slots:generate_current_month",
+          custom_id: "ot_slots:generate_current_month",
           label: "Générer le mois",
           style: ButtonStyle.Success
         }
@@ -3257,19 +3257,19 @@ function buildSlotsCategoryRows() {
       components: [
         {
           type: 2,
-          custom_id: "mu_slots:delete_month",
+          custom_id: "ot_slots:delete_month",
           label: "Supprimer le mois",
           style: ButtonStyle.Danger
         },
         {
           type: 2,
-          custom_id: "mu_slots:delete_date",
+          custom_id: "ot_slots:delete_date",
           label: "Supprimer une date",
           style: ButtonStyle.Danger
         },
         {
           type: 2,
-          custom_id: "mu_slots:configure_days",
+          custom_id: "ot_slots:configure_days",
           label: "Configurer les jours",
           style: ButtonStyle.Primary
         }
@@ -3285,13 +3285,13 @@ function buildGamesCategoryRows() {
       components: [
         {
           type: 2,
-          custom_id: "mu_games:configure",
+          custom_id: "ot_games:configure",
           label: "Configurer jeux & canaux",
           style: ButtonStyle.Primary
         },
         {
           type: 2,
-          custom_id: "mu_games:add",
+          custom_id: "ot_games:add",
           label: "Ajouter un jeu",
           style: ButtonStyle.Secondary
         }
@@ -3302,13 +3302,13 @@ function buildGamesCategoryRows() {
       components: [
         {
           type: 2,
-          custom_id: "mu_tables:set",
+          custom_id: "ot_tables:set",
           label: "Définir les tables d'une soirée",
           style: ButtonStyle.Primary
         },
         {
           type: 2,
-          custom_id: "mu_tables:show",
+          custom_id: "ot_tables:show",
           label: "Voir les tables d'une soirée",
           style: ButtonStyle.Secondary
         }
@@ -3325,13 +3325,13 @@ function buildMatchesCategoryRows() {
       components: [
         {
           type: 2,
-          custom_id: "mu_match:create",
+          custom_id: "ot_match:create",
           label: "Créer",
           style: ButtonStyle.Primary
         },
         {
           type: 2,
-          custom_id: "mu_match:validate_request",
+          custom_id: "ot_match:validate_request",
           label: "Valider",
           style: ButtonStyle.Success
         }
@@ -3342,13 +3342,13 @@ function buildMatchesCategoryRows() {
       components: [
         {
           type: 2,
-          custom_id: "mu_match:refuse_request",
+          custom_id: "ot_match:refuse_request",
           label: "Refuser",
           style: ButtonStyle.Danger
         },
         {
           type: 2,
-          custom_id: "mu_match:cancel_request",
+          custom_id: "ot_match:cancel_request",
           label: "Annuler",
           style: ButtonStyle.Secondary
         }
@@ -3364,14 +3364,14 @@ function buildNotificationsCategoryRows(settings: { mentionInThread: boolean }) 
       components: [
         {
           type: 2,
-          custom_id: "mu_notifications:mention_thread:on",
+          custom_id: "ot_notifications:mention_thread:on",
           label: "Activer mentions fil",
           style: ButtonStyle.Success,
           disabled: settings.mentionInThread
         },
         {
           type: 2,
-          custom_id: "mu_notifications:mention_thread:off",
+          custom_id: "ot_notifications:mention_thread:off",
           label: "Désactiver mentions fil",
           style: ButtonStyle.Secondary,
           disabled: !settings.mentionInThread
@@ -3388,13 +3388,13 @@ function buildAutomationsCategoryRows() {
       components: [
         {
           type: 2,
-          custom_id: "mu_automation:configure",
+          custom_id: "ot_automation:configure",
           label: "Configurer",
           style: ButtonStyle.Primary
         },
         {
           type: 2,
-          custom_id: "mu_automation:reset_defaults",
+          custom_id: "ot_automation:reset_defaults",
           label: "Valeurs par défaut",
           style: ButtonStyle.Secondary
         }
@@ -3471,7 +3471,7 @@ function buildGamesSelectRow(games: Game[], selectedId: number): ReplyComponentR
     components: [
       {
         type: 3,
-        custom_id: "mu_games:select",
+        custom_id: "ot_games:select",
         placeholder: "Choisir un jeu",
         min_values: 1,
         max_values: 1,
@@ -3499,7 +3499,7 @@ function buildGamesChannelRow(gameId: number, channelId?: string): ReplyComponen
     default_values?: { id: string; type: "channel" }[];
   } = {
     type: 8,
-    custom_id: `mu_games:channel:${gameId}`,
+    custom_id: `ot_games:channel:${gameId}`,
     placeholder: "Choisir un canal",
     min_values: 1,
     max_values: 1,
@@ -3521,13 +3521,13 @@ function buildGamesActionRow(game: Game, channelId?: string): ReplyComponentRow 
   const toggle = game.active
     ? {
         type: 2,
-        custom_id: `mu_games:disable:${game.id}`,
+        custom_id: `ot_games:disable:${game.id}`,
         label: "Désactiver",
         style: ButtonStyle.Secondary
       }
     : {
         type: 2,
-        custom_id: `mu_games:enable:${game.id}`,
+        custom_id: `ot_games:enable:${game.id}`,
         label: "Réactiver",
         style: ButtonStyle.Success
       };
@@ -3537,21 +3537,21 @@ function buildGamesActionRow(game: Game, channelId?: string): ReplyComponentRow 
     components: [
       {
         type: 2,
-        custom_id: `mu_games:save:${game.id}:${channelId ?? "none"}`,
+        custom_id: `ot_games:save:${game.id}:${channelId ?? "none"}`,
         label: "Enregistrer",
         style: ButtonStyle.Primary,
         disabled: !canSave
       },
       {
         type: 2,
-        custom_id: `mu_games:default_tables:${game.id}`,
+        custom_id: `ot_games:default_tables:${game.id}`,
         label: "Tables par défaut",
         style: ButtonStyle.Secondary
       },
       toggle,
       {
         type: 2,
-        custom_id: "mu_games:add",
+        custom_id: "ot_games:add",
         label: "Ajouter un jeu",
         style: ButtonStyle.Secondary
       }
@@ -3565,7 +3565,7 @@ function buildGamesEmptyRow(): ReplyComponentRow {
     components: [
       {
         type: 2,
-        custom_id: "mu_games:add",
+        custom_id: "ot_games:add",
         label: "Ajouter un jeu",
         style: ButtonStyle.Primary
       }
@@ -3642,13 +3642,13 @@ function buildMatchPanelRows() {
       components: [
         {
           type: 2,
-          custom_id: "mu_match:create",
+          custom_id: "ot_match:create",
           label: "Créer une partie",
           style: ButtonStyle.Primary
         },
         {
           type: 2,
-          custom_id: "mu_match:panel",
+          custom_id: "ot_match:panel",
           label: "Rafraîchir",
           style: ButtonStyle.Secondary
         }
@@ -3663,19 +3663,19 @@ function buildMatchActionRow(matchId: number) {
     components: [
       {
         type: 2,
-        custom_id: `mu_match:validate:${matchId}`,
+        custom_id: `ot_match:validate:${matchId}`,
         label: "Valider",
         style: ButtonStyle.Success
       },
       {
         type: 2,
-        custom_id: `mu_match:refuse:${matchId}`,
+        custom_id: `ot_match:refuse:${matchId}`,
         label: "Refuser",
         style: ButtonStyle.Danger
       },
       {
         type: 2,
-        custom_id: `mu_match:cancel:${matchId}`,
+        custom_id: `ot_match:cancel:${matchId}`,
         label: "Annuler",
         style: ButtonStyle.Secondary
       }
@@ -3723,7 +3723,7 @@ async function buildConfigMenuContent(config: AppConfig): Promise<string> {
 
   return [
     "**Accueil**",
-    "Bienvenue dans la commande de configuration de @Munitorum.",
+    "Bienvenue dans la commande de configuration de @Otto.",
     "Choisis une catégorie ci-dessous ou règle la langue du bot.",
     "",
     baseQuote,
@@ -3938,7 +3938,7 @@ function buildConfirmRow(confirmId: string) {
       },
       {
         type: 2,
-        custom_id: "mu_slots:cancel_delete",
+        custom_id: "ot_slots:cancel_delete",
         label: "Annuler",
         style: ButtonStyle.Secondary
       }
@@ -4337,7 +4337,7 @@ async function showMatchReasonModal(
   }
 
   const modal = {
-    custom_id: `mu_match:${action}_modal:${matchId}`,
+    custom_id: `ot_match:${action}_modal:${matchId}`,
     title: action === "refuse" ? "Refuser une partie" : "Annuler une partie",
     components: [
       {
@@ -4542,7 +4542,7 @@ async function showDeleteDateModal(
   }
 
   const modal = {
-    custom_id: "mu_slots:delete_date_modal",
+    custom_id: "ot_slots:delete_date_modal",
     title: "Supprimer un créneau",
     components: [
       {
@@ -4578,7 +4578,7 @@ async function showSlotDaysModal(interaction: ButtonInteraction, config: AppConf
   }
 
   const modal = {
-    custom_id: "mu_slots:configure_days_modal",
+    custom_id: "ot_slots:configure_days_modal",
     title: "Configurer les jours des créneaux",
     components: [
       {
@@ -4618,7 +4618,7 @@ async function showAutomationSettingsModal(
 
   const settings = await getAutomationSettings(getPrisma());
   const modal = {
-    custom_id: "mu_automation:configure_modal",
+    custom_id: "ot_automation:configure_modal",
     title: "Configurer les automatisations",
     components: [
       {
@@ -4698,7 +4698,7 @@ async function showGameAddModal(interaction: ButtonInteraction): Promise<void> {
   }
 
   const modal = {
-    custom_id: "mu_games:add_modal",
+    custom_id: "ot_games:add_modal",
     title: "Ajouter un jeu",
     components: [
       {
@@ -4752,7 +4752,7 @@ async function showGameDefaultTablesModal(interaction: ButtonInteraction): Promi
     return;
   }
 
-  const gameId = Number(interaction.customId.replace("mu_games:default_tables:", ""));
+  const gameId = Number(interaction.customId.replace("ot_games:default_tables:", ""));
   if (!Number.isInteger(gameId)) {
     await replyEphemeral(interaction, { content: "❌ Jeu invalide." });
     return;
@@ -4765,7 +4765,7 @@ async function showGameDefaultTablesModal(interaction: ButtonInteraction): Promi
   }
 
   const modal = {
-    custom_id: `mu_games:default_tables_modal:${game.id}`,
+    custom_id: `ot_games:default_tables_modal:${game.id}`,
     title: `Défaut ${game.label}`.slice(0, 45),
     components: [
       {
@@ -4795,7 +4795,7 @@ async function showMatchCreateModal(interaction: ButtonInteraction): Promise<voi
   }
 
   const modal = {
-    custom_id: "mu_match:create_modal",
+    custom_id: "ot_match:create_modal",
     title: "Créer une partie",
     components: [
       {
@@ -4883,7 +4883,7 @@ async function showMatchActionModal(
   };
 
   const modal = {
-    custom_id: `mu_match:${action}_request_modal`,
+    custom_id: `ot_match:${action}_request_modal`,
     title: titleMap[action],
     components: [
       {

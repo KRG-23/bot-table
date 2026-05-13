@@ -62,7 +62,7 @@
 
 ## Phase 6 — Notifications & règles métier
 
-- [x] Option mention dans le fil (setting admin via `/mu_config` > Notifications)
+- [x] Option mention dans le fil (setting admin via `/ot_config` > Notifications)
 - [x] DM systématique + option mention thread
 - [x] Blocage sur dates fermées (vacances)
 - [x] Auto-validation à la demande (après annulation)

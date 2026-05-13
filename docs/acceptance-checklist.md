@@ -15,8 +15,8 @@ Objectif : valider le bot avant un déploiement durable ou avant ouverture à un
 
 ```bash
 npm run check
-MUNITORUM_ENV_FILE=.env.dev docker compose --env-file .env.dev -f docker-compose.prod.yml config
-MUNITORUM_ENV_FILE=.env.dev docker compose --env-file .env.dev -f docker-compose.prod.yml build bot
+OTTO_ENV_FILE=.env.dev docker compose --env-file .env.dev -f docker-compose.prod.yml config
+OTTO_ENV_FILE=.env.dev docker compose --env-file .env.dev -f docker-compose.prod.yml build bot
 ```
 
 Résultat attendu :
@@ -25,7 +25,7 @@ Résultat attendu :
 - build TypeScript OK ;
 - tests OK ;
 - configuration Compose prod valide ;
-- image `munitorum-bot:prod` construite.
+- image `otto-table-bot:prod` construite.
 
 ## Fuseau horaire et changement d'heure
 
@@ -44,7 +44,7 @@ Points validés :
 
 Action :
 
-- lancer `/mu_health`.
+- lancer `/ot_health`.
 
 Attendu :
 
@@ -56,7 +56,7 @@ Attendu :
 
 Actions :
 
-- lancer `/mu_config` ;
+- lancer `/ot_config` ;
 - ouvrir “Jeux & tables” ;
 - vérifier qu'un jeu actif a un canal ;
 - définir les tables par défaut ;
@@ -66,13 +66,13 @@ Attendu :
 
 - le jeu apparaît actif ;
 - le canal est enregistré ;
-- la capacité par date est visible dans “État” ou `/mu_tables show`.
+- la capacité par date est visible dans “État” ou `/ot_tables show`.
 
 ### 3. Génération des créneaux
 
 Actions :
 
-- ouvrir `/mu_config` > “Créneaux” ;
+- ouvrir `/ot_config` > “Créneaux” ;
 - cliquer “Générer le mois”.
 
 Attendu :
@@ -87,7 +87,7 @@ Attendu :
 Action dans un fil de soirée :
 
 ```text
-@Munitorum @Joueur1 vs @Joueur2
+@Otto @Joueur1 vs @Joueur2
 ```
 
 Attendu :
@@ -112,7 +112,7 @@ Attendu :
 
 Action :
 
-- cliquer `Valider` ou utiliser `/mu_match validate`.
+- cliquer `Valider` ou utiliser `/ot_match validate`.
 
 Attendu :
 
@@ -124,7 +124,7 @@ Attendu :
 
 Action :
 
-- cliquer `Refuser` ou utiliser `/mu_match refuse`.
+- cliquer `Refuser` ou utiliser `/ot_match refuse`.
 
 Attendu :
 
@@ -141,7 +141,7 @@ Pré-requis :
 
 Action :
 
-- annuler la partie validée depuis le bouton ou `/mu_match cancel`.
+- annuler la partie validée depuis le bouton ou `/ot_match cancel`.
 
 Attendu :
 
@@ -167,7 +167,7 @@ Attendu :
 
 Actions :
 
-- ouvrir `/mu_config` > “Automatisations” ;
+- ouvrir `/ot_config` > “Automatisations” ;
 - modifier une valeur ;
 - réinitialiser les valeurs par défaut.
 
@@ -190,7 +190,7 @@ Attendu :
 
 - bot reconnecté ;
 - commandes enregistrées ;
-- jeux, tables, créneaux et parties déjà créés toujours visibles via `/mu_config`.
+- jeux, tables, créneaux et parties déjà créés toujours visibles via `/ot_config`.
 
 Pour tester une restauration :
 

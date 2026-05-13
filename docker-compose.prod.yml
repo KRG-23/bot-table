@@ -3,9 +3,9 @@ services:
     build:
       context: .
       target: prod
-    image: munitorum-bot:prod
+    image: otto-table-bot:prod
     env_file:
-      - ${MUNITORUM_ENV_FILE:-.env.prod}
+      - ${OTTO_ENV_FILE:-.env.prod}
     dns:
       - ${DNS_PRIMARY:-1.1.1.1}
       - ${DNS_SECONDARY:-8.8.8.8}

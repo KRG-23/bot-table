@@ -50,7 +50,7 @@ Sauvegarde manuelle :
 docker compose --env-file .env.prod -f docker-compose.prod.yml exec bot npm run backup:run
 ```
 
-Les fichiers générés ont la forme `munitorum_YYYYMMDD_HHmmss.dump`.
+Les fichiers générés ont la forme `otto_YYYYMMDD_HHmmss.dump`.
 
 ## Restauration
 
@@ -64,7 +64,7 @@ docker compose --env-file .env.prod -f docker-compose.prod.yml stop bot
 
 ```bash
 docker compose --env-file .env.prod -f docker-compose.prod.yml exec postgres sh -c \
-  'pg_restore --clean --if-exists --no-owner --no-privileges -U "$POSTGRES_USER" -d "$POSTGRES_DB" /backups/munitorum_YYYYMMDD_HHmmss.dump'
+  'pg_restore --clean --if-exists --no-owner --no-privileges -U "$POSTGRES_USER" -d "$POSTGRES_DB" /backups/otto_YYYYMMDD_HHmmss.dump'
 ```
 
 3. Redémarrer le bot :

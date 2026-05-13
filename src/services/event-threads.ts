@@ -76,7 +76,7 @@ function buildThreadGuideMessage(game: Game, date: dayjs.Dayjs, botName: string)
     "• Une seule partie par joueur pour la soirée.",
     "• Les réservations ouvrent quand les tables sont configurées.",
     "• Les réservations sont bloquées si le créneau est fermé.",
-    "• Les admins peuvent gérer ce fil avec les boutons ci-dessous ou depuis `/mu_config`."
+    "• Les admins peuvent gérer ce fil avec les boutons ci-dessous ou depuis `/ot_config`."
   ].join("\n");
 }
 
@@ -89,19 +89,19 @@ function buildThreadAdminRow(
     components: [
       {
         type: 2,
-        custom_id: `mu_thread:status:${eventId}:${gameId}`,
+        custom_id: `ot_thread:status:${eventId}:${gameId}`,
         label: "État",
         style: ButtonStyle.Secondary
       },
       {
         type: 2,
-        custom_id: `mu_thread:tables:${eventId}:${gameId}`,
+        custom_id: `ot_thread:tables:${eventId}:${gameId}`,
         label: "Tables",
         style: ButtonStyle.Primary
       },
       {
         type: 2,
-        custom_id: `mu_thread:validate:${eventId}:${gameId}`,
+        custom_id: `ot_thread:validate:${eventId}:${gameId}`,
         label: "Confirmer",
         style: ButtonStyle.Success
       }
@@ -193,7 +193,7 @@ export async function ensureEventThreads(
 
       try {
         await thread.send({
-          content: buildThreadGuideMessage(game, eventDate, client.user?.username ?? "Munitorum"),
+          content: buildThreadGuideMessage(game, eventDate, client.user?.username ?? "Otto"),
           components: [buildThreadAdminRow(event.id, game.id)]
         });
       } catch (err) {

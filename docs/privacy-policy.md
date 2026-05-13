@@ -1,4 +1,4 @@
-# Munitorum – Politique de confidentialité / Privacy Policy
+# Otto – Politique de confidentialité / Privacy Policy
 
 **Dernière mise à jour / Last updated:** 2026-02-04
 
@@ -8,7 +8,7 @@
 
 ### 1. Données collectées
 
-Munitorum traite uniquement les données nécessaires au fonctionnement du bot :
+Otto traite uniquement les données nécessaires au fonctionnement du bot :
 
 - Identifiants Discord (ID serveur, ID canal, ID utilisateur)
 - Pseudonyme/nom d’affichage Discord
@@ -38,7 +38,7 @@ Les tokens et accès sensibles sont stockés en variables d’environnement. L�
 
 ### 6. Vos droits
 
-Pour toute demande d’accès, de correction ou de suppression des données, contactez les administrateurs du serveur Discord où Munitorum est utilisé.
+Pour toute demande d’accès, de correction ou de suppression des données, contactez les administrateurs du serveur Discord où Otto est utilisé.
 
 ### 7. Modifications
 
@@ -50,7 +50,7 @@ Cette politique peut être mise à jour. L’utilisation continue du bot vaut ac
 
 ### 1. Data collected
 
-Munitorum processes only the data required to operate:
+Otto processes only the data required to operate:
 
 - Discord identifiers (server ID, channel ID, user ID)
 - Discord username/display name
@@ -80,7 +80,7 @@ Tokens and sensitive access are stored in environment variables. Database access
 
 ### 6. Your rights
 
-For access, correction, or deletion requests, contact the administrators of the Discord server where Munitorum is used.
+For access, correction, or deletion requests, contact the administrators of the Discord server where Otto is used.
 
 ### 7. Changes
 

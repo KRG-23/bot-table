@@ -2,14 +2,14 @@
 
 ## Commandes principales
 
-- `/mu_config` : menu public de configuration, actions admin protégées.
-- `/mu_health` : état du bot et métriques depuis le dernier démarrage.
-- `/mu_slots ...` : gestion directe des créneaux.
-- `/mu_games ...` : gestion directe des jeux et canaux.
-- `/mu_tables ...` : gestion directe des tables par date et par jeu.
-- `/mu_match ...` : création, validation, refus ou annulation d'une partie.
+- `/ot_config` : menu public de configuration, actions admin protégées.
+- `/ot_health` : état du bot et métriques depuis le dernier démarrage.
+- `/ot_slots ...` : gestion directe des créneaux.
+- `/ot_games ...` : gestion directe des jeux et canaux.
+- `/ot_tables ...` : gestion directe des tables par date et par jeu.
+- `/ot_match ...` : création, validation, refus ou annulation d'une partie.
 
-## Accueil `/mu_config`
+## Accueil `/ot_config`
 
 L'accueil affiche :
 
@@ -57,7 +57,7 @@ Chaque fil de soirée correspond à un jeu et une date :
 Dans un fil, les joueurs peuvent créer une partie avec :
 
 ```text
-@Munitorum @Joueur1 vs @Joueur2
+@Otto @Joueur1 vs @Joueur2
 ```
 
 Le jeu est déduit automatiquement du fil. Le bot accepte aussi une mention, un
@@ -100,4 +100,4 @@ Les valeurs par défaut sont :
 - backup PostgreSQL : samedi à 23:00 ;
 - rétention backup : 30 jours.
 
-Ces valeurs se modifient dans `/mu_config` > “Automatisations”.
+Ces valeurs se modifient dans `/ot_config` > “Automatisations”.

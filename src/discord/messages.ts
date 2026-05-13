@@ -17,7 +17,7 @@ import { getGameTableCapacity } from "../services/table-capacity";
 import { formatFrenchDate, parseFrenchDayMonth } from "../utils/dates";
 
 const BASE_USAGE =
-  "Format attendu : @Munitorum @Joueur1 vs @Joueur2 [jeu]. Les joueurs doivent être une mention, un ID Discord ou un nom exact du serveur.";
+  "Format attendu : @Otto @Joueur1 vs @Joueur2 [jeu]. Les joueurs doivent être une mention, un ID Discord ou un nom exact du serveur.";
 
 type ParsedMatch = {
   player1Id: string;
@@ -85,7 +85,7 @@ export async function handleMatchMessage(
 
   if (!threadDate) {
     await message.reply(
-      "❌ Impossible de lire la date du fil. Utilise un fil créé par Munitorum ou un nom du type “Soirée 40k le 23 janvier”."
+      "❌ Impossible de lire la date du fil. Utilise un fil créé par Otto ou un nom du type “Soirée 40k le 23 janvier”."
     );
     return;
   }
@@ -147,7 +147,7 @@ export async function handleMatchMessage(
     await message.reply(
       `❌ Aucune soirée trouvée pour le ${formatFrenchDate(
         threadDate
-      )}. Demande à un admin de saisir les tables via /mu_tables set.`
+      )}. Demande à un admin de saisir les tables via /ot_tables set.`
     );
     return;
   }
@@ -259,19 +259,19 @@ function buildMatchActionRow(matchId: number) {
     components: [
       {
         type: 2,
-        custom_id: `mu_match:validate:${matchId}`,
+        custom_id: `ot_match:validate:${matchId}`,
         label: "Valider",
         style: ButtonStyle.Success
       },
       {
         type: 2,
-        custom_id: `mu_match:refuse:${matchId}`,
+        custom_id: `ot_match:refuse:${matchId}`,
         label: "Refuser",
         style: ButtonStyle.Danger
       },
       {
         type: 2,
-        custom_id: `mu_match:cancel:${matchId}`,
+        custom_id: `ot_match:cancel:${matchId}`,
         label: "Annuler",
         style: ButtonStyle.Secondary
       }

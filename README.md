@@ -1,17 +1,17 @@
-# Munitorum
+# Otto
 
-![Munitorum icon](./munitorum.png)
+![Otto icon](./otto.png)
 
-Munitorum is a Discord bot for tabletop reservations (Warhammer 40k / AoS / Kill Team). It automates table availability, match submissions, validation, and player notifications.
+Otto is a Discord bot for tabletop reservations (Warhammer 40k / AoS / Kill Team). It automates table availability, match submissions, validation, and player notifications.
 
 ## Features (current / planned)
 
-- Slash commands: `/mu_health`, `/mu_config`, `/mu_tables set|show`, `/mu_slots generate|set_days|delete_date|delete_month`, `/mu_match ...`, `/mu_games ...`
+- Slash commands: `/ot_health`, `/ot_config`, `/ot_tables set|show`, `/ot_slots generate|set_days|delete_date|delete_month`, `/ot_match ...`, `/ot_games ...`
 - Table capacity management per game
 - Auto thread creation per game when a slot is opened with tables (and cleanup on cancellation)
 - Thread-level admin controls for per-game tables and possible match validation
 - Dynamic game list with per-game thread channel mapping
-- Match submissions + validation/refusal/cancellation (buttons + `/mu_match`)
+- Match submissions + validation/refusal/cancellation (buttons + `/ot_match`)
 - Config menu with category selector (créneaux / jeux & tables / parties / automatisations)
 - Automatic monthly slot generation on the first Sunday of the month
 - PostgreSQL persistence + scheduled backups
@@ -80,7 +80,7 @@ npm run check
 
 This runs ESLint, TypeScript build, and the Node test suite.
 
-`/mu_health` also returns basic in-memory metrics since the last bot restart:
+`/ot_health` also returns basic in-memory metrics since the last bot restart:
 Discord interactions/errors, match lifecycle counters, auto-validations, DM failures,
 and thread notification failures.
 
@@ -129,7 +129,7 @@ Update `.env.dev` to use localhost for Postgres:
 
 ```
 PGHOST=localhost
-DATABASE_URL=postgresql://munitorum_dbuser:munitorum_dbpassword@localhost:5433/munitorum_dbname
+DATABASE_URL=postgresql://otto_dbuser:otto_dbpassword@localhost:5433/otto_dbname
 ```
 
 Then recreate:
@@ -147,27 +147,27 @@ Enable the following **Privileged Gateway Intents** in the Discord Developer Por
 
 ## Commands
 
-- `/mu_health` — check bot status
-- `/mu_config` — open the public configuration menu (expires 60s after the last interaction, then replaced with a timeout message)
-- `/mu_tables set <date> <count> [game]` — set tables for a Friday, globally or for one game (date format `DD/MM/YYYY`)
-- `/mu_tables show <date>` — show tables for a Friday, including per-game allocation when configured
-- `/mu_slots generate` — create missing Friday slots for the current month
-- `/mu_slots set_days <days>` — configure slot weekdays (ex: `ven` or `1,3,5`)
-- `/mu_slots delete_date <date>` — delete a slot and related matches for a specific date
-- `/mu_slots delete_month` — delete all slots and related matches for the current month
-- `/mu_match panel` — show match management panel
-- `/mu_match create <date> <player1> <player2> <game>` — create a match
-- `/mu_match validate <date> <player1> <player2>` — validate a match
-- `/mu_match refuse <date> <player1> <player2> [reason]` — refuse a match
-- `/mu_match cancel <date> <player1> <player2> [reason]` — cancel a match (admin or player)
-- `/mu_games list` — list configured games
-- `/mu_games add <code> <label> <channel> [default_tables]` — add a game
-- `/mu_games set_channel <game> <channel>` — update a game's thread channel
-- `/mu_games set_default_tables <game> <count>` — update the table count applied by default to new slots
-- `/mu_games disable <game>` — disable a game
-- `/mu_games enable <game>` — enable a game
+- `/ot_health` — check bot status
+- `/ot_config` — open the public configuration menu (expires 60s after the last interaction, then replaced with a timeout message)
+- `/ot_tables set <date> <count> [game]` — set tables for a Friday, globally or for one game (date format `DD/MM/YYYY`)
+- `/ot_tables show <date>` — show tables for a Friday, including per-game allocation when configured
+- `/ot_slots generate` — create missing Friday slots for the current month
+- `/ot_slots set_days <days>` — configure slot weekdays (ex: `ven` or `1,3,5`)
+- `/ot_slots delete_date <date>` — delete a slot and related matches for a specific date
+- `/ot_slots delete_month` — delete all slots and related matches for the current month
+- `/ot_match panel` — show match management panel
+- `/ot_match create <date> <player1> <player2> <game>` — create a match
+- `/ot_match validate <date> <player1> <player2>` — validate a match
+- `/ot_match refuse <date> <player1> <player2> [reason]` — refuse a match
+- `/ot_match cancel <date> <player1> <player2> [reason]` — cancel a match (admin or player)
+- `/ot_games list` — list configured games
+- `/ot_games add <code> <label> <channel> [default_tables]` — add a game
+- `/ot_games set_channel <game> <channel>` — update a game's thread channel
+- `/ot_games set_default_tables <game> <count>` — update the table count applied by default to new slots
+- `/ot_games disable <game>` — disable a game
+- `/ot_games enable <game>` — enable a game
 
-The `/mu_config` menu starts on “Accueil” with a language selector and a table of recorded slots. A base settings reminder appears as a quote block. Admins can configure slot days (multiple weekdays), manage games + channels, per-game default table counts, notification mentions, automation timing, and use category buttons for slots, games + tables, matches, notifications, and automations. The `Jeux & tables` category lets admins pick an existing slot date from a dropdown, select a game, and set that game's table count. Defaults can be applied in one click from the values configured on active games. New games created from the menu default to `DISCORD_CHANNEL_ID` until reassigned; W40K and AoS are prefilled with 5 and 2 tables respectively when detected.
+The `/ot_config` menu starts on “Accueil” with a language selector and a table of recorded slots. A base settings reminder appears as a quote block. Admins can configure slot days (multiple weekdays), manage games + channels, per-game default table counts, notification mentions, automation timing, and use category buttons for slots, games + tables, matches, notifications, and automations. The `Jeux & tables` category lets admins pick an existing slot date from a dropdown, select a game, and set that game's table count. Defaults can be applied in one click from the values configured on active games. New games created from the menu default to `DISCORD_CHANNEL_ID` until reassigned; W40K and AoS are prefilled with 5 and 2 tables respectively when detected.
 
 Each generated game thread also includes admin-only buttons:
 
@@ -175,12 +175,12 @@ Each generated game thread also includes admin-only buttons:
 - `Tables` — update the table count for this game only
 - `Confirmer` — validate pending matches for this game up to the available capacity
 
-In a generated game thread, players can create a match with `@Munitorum @Joueur1 vs @Joueur2`; the game is inferred from the thread. Adding the game at the end still works when it matches the thread.
+In a generated game thread, players can create a match with `@Otto @Joueur1 vs @Joueur2`; the game is inferred from the thread. Adding the game at the end still works when it matches the thread.
 Only pending or validated matches block a player from booking another match on the same slot. Refused or cancelled matches keep their history but release both players for a new booking.
 
 ## Automations
 
-When the bot is ready, it schedules the next automation runs in `TZ` (default `Europe/Paris`) without polling continuously. The schedule is configurable from `/mu_config` > “Automatisations”; saved changes refresh the in-memory scheduler.
+When the bot is ready, it schedules the next automation runs in `TZ` (default `Europe/Paris`) without polling continuously. The schedule is configurable from `/ot_config` > “Automatisations”; saved changes refresh the in-memory scheduler.
 
 Monthly slot generation runs by default on the first Sunday of the month at 09:00. It generates the current month's configured slots once, skips school holiday/holiday-eve closures, applies the configured per-game default table counts to new or empty slots, and posts a summary in `DISCORD_CHANNEL_ID`. Per-game threads are created when the corresponding game has tables configured for the slot.
 
@@ -190,7 +190,7 @@ Monthly slot generation runs by default on the first Sunday of the month at 09:0
 
 Weekly match review runs by default every Wednesday at 21:00. It reviews open slots for the configured window (7 days by default), auto-validates pending matches when validated + pending matches fit within the available tables for their game, sends player DMs, and posts a recap in `DISCORD_CHANNEL_ID`.
 
-When a match is cancelled, Munitorum immediately retries the same auto-validation rule for the affected game and slot.
+When a match is cancelled, Otto immediately retries the same auto-validation rule for the affected game and slot.
 
 Final player notifications run by default every Friday at 17:00. They DM players with validated matches for the current day and post a summary in `DISCORD_CHANNEL_ID`.
 
@@ -209,11 +209,11 @@ Default automation values:
 
 All core actions have both a slash command and a button/modals path:
 
-- Tables + slots: `/mu_tables`, `/mu_slots` or their buttons/dropdowns/modals
-- Slot days: `/mu_slots set_days` or the config modal
-- Games + channels + table defaults: `/mu_games ...` or the `Jeux & tables` config category
-- Match creation: `/mu_match create` or match panel button (modal)
-- Match validate/refuse/cancel: `/mu_match validate|refuse|cancel` or match buttons
+- Tables + slots: `/ot_tables`, `/ot_slots` or their buttons/dropdowns/modals
+- Slot days: `/ot_slots set_days` or the config modal
+- Games + channels + table defaults: `/ot_games ...` or the `Jeux & tables` config category
+- Match creation: `/ot_match create` or match panel button (modal)
+- Match validate/refuse/cancel: `/ot_match validate|refuse|cancel` or match buttons
 
 ## Environment variables
 
@@ -228,7 +228,7 @@ Key vars:
 - `ADMIN_ROLE_ID` — role ID allowed to manage tables (optional; defaults to server admin)
 - `DATABASE_URL` — Postgres connection string
 - `BACKUP_DIR` — directory used by scheduled/manual Postgres backups (default: `data/backups`)
-- `MENTION_IN_THREAD` — default `true`/`false` value before the admin changes it in `/mu_config` > “Notifications”
+- `MENTION_IN_THREAD` — default `true`/`false` value before the admin changes it in `/ot_config` > “Notifications”
 - `ALLOW_BOT_PLAYERS` — DEV/test only: allow Discord bots as players (default: `false`)
 - `LOG_LEVEL` — `info`, `debug`, etc.
 - `VACATION_ACADEMY` — academy used for school holidays (default: Nantes)

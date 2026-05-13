@@ -9,7 +9,7 @@ import type { Logger } from "pino";
 import type { AppConfig } from "../config";
 
 const execFileAsync = promisify(execFile);
-const BACKUP_PREFIX = "munitorum";
+const BACKUP_PREFIX = "otto";
 const BACKUP_EXTENSION = ".dump";
 
 export type PostgresBackupResult = {

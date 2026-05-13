@@ -1,4 +1,4 @@
-# Munitorum – Conditions d’utilisation / Terms of Service
+# Otto – Conditions d’utilisation / Terms of Service
 
 **Dernière mise à jour / Last updated:** 2026-02-04
 
@@ -8,7 +8,7 @@
 
 ### 1. Objet
 
-Munitorum est un bot Discord permettant la gestion des réservations de tables de jeu pour un club. L’utilisation du bot implique l’acceptation des présentes conditions.
+Otto est un bot Discord permettant la gestion des réservations de tables de jeu pour un club. L’utilisation du bot implique l’acceptation des présentes conditions.
 
 ### 2. Accès et éligibilité
 
@@ -16,7 +16,7 @@ Le bot est destiné aux membres du serveur Discord où il est déployé. Toute u
 
 ### 3. Fonctionnement
 
-Munitorum permet de créer et valider des parties entre deux joueurs, de gérer les tables disponibles, et d’envoyer des notifications liées aux réservations.
+Otto permet de créer et valider des parties entre deux joueurs, de gérer les tables disponibles, et d’envoyer des notifications liées aux réservations.
 
 ### 4. Responsabilités
 
@@ -32,7 +32,7 @@ Ces conditions peuvent être mises à jour. En continuant à utiliser le bot apr
 
 ### 7. Contact
 
-Pour toute question, contactez les administrateurs du serveur Discord où Munitorum est utilisé.
+Pour toute question, contactez les administrateurs du serveur Discord où Otto est utilisé.
 
 ---
 
@@ -40,7 +40,7 @@ Pour toute question, contactez les administrateurs du serveur Discord où Munito
 
 ### 1. Purpose
 
-Munitorum is a Discord bot that manages tabletop reservations for a club. Using the bot means you accept these Terms.
+Otto is a Discord bot that manages tabletop reservations for a club. Using the bot means you accept these Terms.
 
 ### 2. Access and eligibility
 
@@ -48,7 +48,7 @@ The bot is intended for members of the Discord server where it is deployed. Misu
 
 ### 3. Functionality
 
-Munitorum lets users create and validate matches between two players, manage available tables, and receive reservation notifications.
+Otto lets users create and validate matches between two players, manage available tables, and receive reservation notifications.
 
 ### 4. Responsibility
 
@@ -64,4 +64,4 @@ These Terms may be updated. Continuing to use the bot after changes means you ac
 
 ### 7. Contact
 
-For questions, contact the administrators of the Discord server where Munitorum is used.
+For questions, contact the administrators of the Discord server where Otto is used.
