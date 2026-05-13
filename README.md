@@ -149,6 +149,7 @@ Each generated game thread also includes admin-only buttons:
 - `Confirmer` — validate pending matches for this game up to the available capacity
 
 In a generated game thread, players can create a match with `@Munitorum @Joueur1 vs @Joueur2`; the game is inferred from the thread. Adding the game at the end still works when it matches the thread.
+Only pending or validated matches block a player from booking another match on the same slot. Refused or cancelled matches keep their history but release both players for a new booking.
 
 ## Automations
 
@@ -161,6 +162,8 @@ Monthly slot generation runs by default on the first Sunday of the month at 09:0
 - the last automatic run month is stored in the `monthly_slots_last_auto_run` setting
 
 Weekly match review runs by default every Wednesday at 21:00. It reviews open slots for the configured window (7 days by default), auto-validates pending matches when validated + pending matches fit within the available tables for their game, sends player DMs, and posts a recap in `DISCORD_CHANNEL_ID`.
+
+When a match is cancelled, Munitorum immediately retries the same auto-validation rule for the affected game and slot.
 
 Final player notifications run by default every Friday at 17:00. They DM players with validated matches for the current day and post a summary in `DISCORD_CHANNEL_ID`.
 

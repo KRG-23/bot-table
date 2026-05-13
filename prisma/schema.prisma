@@ -85,9 +85,9 @@ model Match {
 
   notifications Notification[]
 
-  @@unique([eventId, player1Id])
-  @@unique([eventId, player2Id])
   @@index([eventId])
+  @@index([eventId, player1Id])
+  @@index([eventId, player2Id])
 }
 
 model Notification {

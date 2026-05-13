@@ -33,6 +33,12 @@ export type WeeklyMatchReviewResult = {
   lines: string[];
 };
 
+export type GameAutoValidationResult = {
+  autoValidated: number;
+  pendingAfterReview: number;
+  remainingTables: number;
+};
+
 function isSendableChannel(channel: unknown): channel is SendableChannel {
   if (!channel || typeof channel !== "object") {
     return false;
@@ -172,6 +178,74 @@ export async function reviewUpcomingMatches(
   }
 
   return result;
+}
+
+export async function autoValidatePendingMatchesForGame(
+  client: Client,
+  config: AppConfig,
+  logger: Logger,
+  eventId: number,
+  gameId: number
+): Promise<GameAutoValidationResult> {
+  const prisma = getPrisma();
+  const event = await prisma.event.findUnique({
+    where: { id: eventId },
+    include: {
+      matches: {
+        where: {
+          gameId,
+          status: { in: [MatchStatus.EN_ATTENTE, MatchStatus.VALIDE] }
+        },
+        include: {
+          player1: true,
+          player2: true,
+          game: true,
+          event: true
+        },
+        orderBy: { createdAt: "asc" }
+      }
+    }
+  });
+
+  if (!event || event.status !== "OUVERT" || event.tables <= 0) {
+    return { autoValidated: 0, pendingAfterReview: 0, remainingTables: 0 };
+  }
+
+  const gameCapacity = await getGameTableCapacity(prisma, event, gameId);
+  const validated = event.matches.filter((match) => match.status === MatchStatus.VALIDE);
+  const pending = event.matches.filter((match) => match.status === MatchStatus.EN_ATTENTE);
+  const activeCount = validated.length + pending.length;
+  const remainingBeforeReview = Math.max(gameCapacity - validated.length, 0);
+
+  if (pending.length === 0) {
+    return { autoValidated: 0, pendingAfterReview: 0, remainingTables: remainingBeforeReview };
+  }
+
+  if (gameCapacity <= 0 || activeCount > gameCapacity) {
+    return {
+      autoValidated: 0,
+      pendingAfterReview: pending.length,
+      remainingTables: remainingBeforeReview
+    };
+  }
+
+  await prisma.match.updateMany({
+    where: {
+      id: { in: pending.map((match) => match.id) },
+      status: MatchStatus.EN_ATTENTE
+    },
+    data: { status: MatchStatus.VALIDE }
+  });
+
+  await Promise.all(
+    pending.map((match) => notifyAutoValidatedMatch(client, config, logger, match))
+  );
+
+  return {
+    autoValidated: pending.length,
+    pendingAfterReview: 0,
+    remainingTables: gameCapacity - activeCount
+  };
 }
 
 async function notifyAutoValidatedMatch(

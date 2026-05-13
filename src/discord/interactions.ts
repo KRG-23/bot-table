@@ -48,6 +48,7 @@ import {
   resolveGameFromInput
 } from "../services/games";
 import { buildPendingValidationDm, buildPendingValidationNotice } from "../services/match-notices";
+import { autoValidatePendingMatchesForGame } from "../services/match-review";
 import {
   buildMonthlySlotGenerationSummary,
   generateCurrentMonthSlots
@@ -2880,6 +2881,7 @@ async function handleMatchCreate(
   const duplicate = await prisma.match.findFirst({
     where: {
       eventId: event.id,
+      status: { in: [MatchStatus.EN_ATTENTE, MatchStatus.VALIDE] },
       OR: [
         { player1Id: player1.id },
         { player2Id: player1.id },
@@ -4160,7 +4162,25 @@ async function performMatchCancel(
     `⚠️ Votre partie est annulée : ${summary}${reasonSuffix}`
   );
 
-  await interaction.editReply({ content: "⚠️ Partie annulée." });
+  const autoValidation = await autoValidatePendingMatchesForGame(
+    interaction.client,
+    config,
+    logger,
+    match.eventId,
+    match.gameId
+  );
+  const autoValidationLines =
+    autoValidation.autoValidated > 0
+      ? [
+          "",
+          `✅ ${autoValidation.autoValidated} partie(s) en attente auto-validée(s).`,
+          `Tables restantes : ${autoValidation.remainingTables}.`
+        ]
+      : [];
+
+  await interaction.editReply({
+    content: ["⚠️ Partie annulée.", ...autoValidationLines].join("\n")
+  });
 }
 
 async function showMatchReasonModal(

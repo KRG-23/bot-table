@@ -64,10 +64,10 @@
 
 - [x] Option mention dans le fil (setting admin via `/mu_config` > Notifications)
 - [x] DM systématique + option mention thread
-- [ ] Blocage sur dates fermées (vacances)
-- [ ] Auto-validation à la demande (après annulation)
-- [ ] Empêcher double réservation joueur
-- [ ] Gestion “abandon” (nouvelle notification possible)
+- [x] Blocage sur dates fermées (vacances)
+- [x] Auto-validation à la demande (après annulation)
+- [x] Empêcher double réservation joueur
+- [x] Gestion “abandon” (nouvelle notification possible)
   - [x] Bloquant : clarifier si mention dans thread est activable par serveur ou par événement (choix actuel : serveur)
 
 ## Phase 7 — Observabilité & qualité

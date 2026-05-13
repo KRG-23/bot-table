@@ -67,7 +67,7 @@
 ## 6. Règles métier
 
 - Une partie = 2 joueurs (pas d’équipes ni multi-table pour l’instant).
-- Pas de double réservation d’un joueur sur le même vendredi (refus ou avertissement configurable).
+- Pas de double réservation active d’un joueur sur le même vendredi : les parties en attente ou validées bloquent, les parties refusées ou annulées libèrent les joueurs.
 - Auto-validation seulement si **toutes** les parties enregistrées tiennent dans la capacité restante.
 - Les admins peuvent toujours valider/refuser même si la capacité est dépassée (warning affiché).
 - Annulation d’une partie validée libère une table et peut déclencher auto-validation des parties en attente.

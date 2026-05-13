@@ -1,5 +1,5 @@
 import type { Game } from "@prisma/client";
-import { NotificationType } from "@prisma/client";
+import { MatchStatus, NotificationType } from "@prisma/client";
 import dayjs from "dayjs";
 import type { Message } from "discord.js";
 import { ButtonStyle } from "discord.js";
@@ -176,6 +176,7 @@ export async function handleMatchMessage(
   const duplicate = await prisma.match.findFirst({
     where: {
       eventId: event.id,
+      status: { in: [MatchStatus.EN_ATTENTE, MatchStatus.VALIDE] },
       OR: [
         { player1Id: player1.id },
         { player2Id: player1.id },
