@@ -49,6 +49,7 @@ import {
 } from "../services/games";
 import { buildPendingValidationDm, buildPendingValidationNotice } from "../services/match-notices";
 import { autoValidatePendingMatchesForGame } from "../services/match-review";
+import { BLOCKING_MATCH_STATUSES } from "../services/matches";
 import {
   buildMonthlySlotGenerationSummary,
   generateCurrentMonthSlots
@@ -2881,7 +2882,7 @@ async function handleMatchCreate(
   const duplicate = await prisma.match.findFirst({
     where: {
       eventId: event.id,
-      status: { in: [MatchStatus.EN_ATTENTE, MatchStatus.VALIDE] },
+      status: { in: BLOCKING_MATCH_STATUSES },
       OR: [
         { player1Id: player1.id },
         { player2Id: player1.id },

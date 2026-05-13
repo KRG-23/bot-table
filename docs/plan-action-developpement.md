@@ -74,9 +74,10 @@
 
 - [ ] Logs structurés + rotation
 - [ ] Métriques basiques (parties, erreurs Discord)
-- [ ] Tests unitaires règles métier
-- [ ] Tests parsing messages + permissions
-- [ ] Script `npm run check` (lint + tests)
+- [x] Tests unitaires règles métier
+- [x] Tests parsing messages
+- [ ] Tests permissions
+- [x] Script `npm run check` (lint + build + tests)
   - [ ] Bloquant : définir le niveau minimal de tests avant prod (smoke vs unit)
 
 ## Phase 8 — Packaging & docs

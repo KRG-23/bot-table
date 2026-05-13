@@ -8,6 +8,7 @@ import { getPrisma } from "../db";
 import { formatFrenchDate } from "../utils/dates";
 
 import { getAppSettings } from "./app-settings";
+import { BLOCKING_MATCH_STATUSES } from "./matches";
 import { getEventTableCapacity, getGameTableCapacity } from "./table-capacity";
 
 type ReplyComponents = InteractionReplyOptions["components"];
@@ -99,7 +100,7 @@ export async function reviewUpcomingMatches(
     include: {
       matches: {
         where: {
-          status: { in: [MatchStatus.EN_ATTENTE, MatchStatus.VALIDE] }
+          status: { in: BLOCKING_MATCH_STATUSES }
         },
         include: {
           player1: true,
@@ -194,7 +195,7 @@ export async function autoValidatePendingMatchesForGame(
       matches: {
         where: {
           gameId,
-          status: { in: [MatchStatus.EN_ATTENTE, MatchStatus.VALIDE] }
+          status: { in: BLOCKING_MATCH_STATUSES }
         },
         include: {
           player1: true,

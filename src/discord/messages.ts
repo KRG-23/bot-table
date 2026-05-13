@@ -1,5 +1,5 @@
 import type { Game } from "@prisma/client";
-import { MatchStatus, NotificationType } from "@prisma/client";
+import { NotificationType } from "@prisma/client";
 import dayjs from "dayjs";
 import type { Message } from "discord.js";
 import { ButtonStyle } from "discord.js";
@@ -10,6 +10,7 @@ import { getPrisma } from "../db";
 import { getAutomationSettings } from "../services/automation-settings";
 import { listActiveGames, resolveGameFromInput } from "../services/games";
 import { buildPendingValidationDm, buildPendingValidationNotice } from "../services/match-notices";
+import { BLOCKING_MATCH_STATUSES } from "../services/matches";
 import { getSlotDays, formatSlotDays, isSlotDay } from "../services/slots";
 import { getGameTableCapacity } from "../services/table-capacity";
 import { formatFrenchDate, parseFrenchDayMonth } from "../utils/dates";
@@ -176,7 +177,7 @@ export async function handleMatchMessage(
   const duplicate = await prisma.match.findFirst({
     where: {
       eventId: event.id,
-      status: { in: [MatchStatus.EN_ATTENTE, MatchStatus.VALIDE] },
+      status: { in: BLOCKING_MATCH_STATUSES },
       OR: [
         { player1Id: player1.id },
         { player2Id: player1.id },
@@ -247,7 +248,10 @@ function buildMatchActionRow(matchId: number) {
   };
 }
 
-async function parseMatchMessage(message: Message, botId: string): Promise<ParsedMatch | null> {
+export async function parseMatchMessage(
+  message: Message,
+  botId: string
+): Promise<ParsedMatch | null> {
   const content = message.content;
   const withoutBot = content.replace(new RegExp(`<@!?${botId}>`, "g"), " ").trim();
   const separator = /\s+(?:vs|contre)\s+/i;

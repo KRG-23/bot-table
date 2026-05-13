@@ -13,7 +13,8 @@
     "backup": "npm run build && node dist/scripts/backup.js",
     "lint": "eslint \"src/**/*.{ts,tsx}\"",
     "format": "prettier --write \"{src,scripts,docs}/**/*.{ts,tsx,js,json,md,yml,yaml}\"",
-    "test": "npm run lint",
+    "test": "npm run build && node --test dist/**/*.test.js",
+    "check": "npm run lint && npm run test",
     "prepare": "husky install",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev --name init"

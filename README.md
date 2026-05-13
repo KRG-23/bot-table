@@ -57,6 +57,16 @@ docker compose --env-file .env.dev up bot
 
 This will run `prisma generate` on startup to keep the client in sync.
 
+## Quality checks
+
+Run the full local verification before committing:
+
+```bash
+npm run check
+```
+
+This runs ESLint, TypeScript build, and the Node test suite.
+
 ### TLS note (DEV only)
 
 If your network uses TLS inspection (self-signed certs), local dev may fail with
