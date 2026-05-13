@@ -1,3 +1,5 @@
+name: ${COMPOSE_PROJECT_NAME:-otto-table-dev}
+
 services:
   bot:
     build:
@@ -28,7 +30,7 @@ services:
       POSTGRES_PASSWORD: ${PGPASSWORD}
       POSTGRES_DB: ${PGDATABASE}
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - otto_postgres_data:/var/lib/postgresql/data
       - ./data/backups:/backups
     ports:
       - "5433:5432"
@@ -45,4 +47,4 @@ services:
     restart: unless-stopped
 
 volumes:
-  postgres_data:
+  otto_postgres_data:

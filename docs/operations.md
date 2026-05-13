@@ -11,6 +11,8 @@ cp .env.example .env.prod
 Renseigner au minimum `DISCORD_TOKEN`, `DISCORD_GUILD_ID`, `DISCORD_CHANNEL_ID`,
 `DISCORD_APP_ID`, `PGUSER`, `PGPASSWORD`, `PGDATABASE` et `DATABASE_URL`.
 En production, `DATABASE_URL` doit pointer vers le service Compose `postgres`.
+Définir `COMPOSE_PROJECT_NAME` pour nommer explicitement les ressources Docker
+(`otto-table-prod` recommandé en production).
 
 2. Construire et démarrer :
 
@@ -89,3 +91,35 @@ Avant commit ou déploiement :
 ```bash
 npm run check
 ```
+
+## Repartir sur une base neuve
+
+Le nom de projet Compose pilote les noms des conteneurs, réseaux et volumes.
+Pour créer une base vide sans supprimer l’ancienne :
+
+1. Définir un nouveau projet dans l’env file :
+
+```env
+COMPOSE_PROJECT_NAME=otto-table-dev
+PGUSER=otto_dbuser
+PGPASSWORD=otto_dbpassword
+PGDATABASE=otto_dbname
+DATABASE_URL=postgresql://otto_dbuser:otto_dbpassword@postgres:5432/otto_dbname
+```
+
+2. Arrêter l’ancienne stack si elle tourne encore :
+
+```bash
+docker compose --env-file .env.dev -p bot-table down
+```
+
+3. Démarrer la nouvelle stack et appliquer les migrations :
+
+```bash
+docker compose --env-file .env.dev up -d postgres
+docker compose --env-file .env.dev run --rm bot npm run prisma:migrate
+docker compose --env-file .env.dev up -d bot
+```
+
+L’ancien volume `bot-table_postgres_data` reste disponible tant qu’il n’est pas
+supprimé manuellement.

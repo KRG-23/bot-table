@@ -37,6 +37,10 @@ Fill in at least:
 - `DISCORD_CHANNEL_ID`
 - `DISCORD_APP_ID`
 
+`COMPOSE_PROJECT_NAME` controls Docker resource names. The default dev stack uses
+`otto-table-dev`, which creates an isolated Postgres volume
+(`otto-table-dev_otto_postgres_data`) and leaves older `bot-table` volumes untouched.
+
 2. Start Postgres (Docker):
 
 ```bash
