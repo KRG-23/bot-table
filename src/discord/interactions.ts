@@ -3728,7 +3728,7 @@ async function buildConfigMenuContent(config: AppConfig): Promise<string> {
     "",
     baseQuote,
     "",
-    `Créneaux enregistrés (${formatFrenchMonthYear(now)})`,
+    `Créneaux du mois (${formatFrenchMonthYear(now)})`,
     slotsTable
   ].join("\n");
 }
@@ -3848,7 +3848,7 @@ async function buildRegisteredSlotsTable(config: AppConfig): Promise<string> {
     events.map(async (event) => {
       const date = dayjs(event.date).tz(config.timezone);
       const capacity = await getEventTableCapacity(prisma, event);
-      return `• ${formatFrenchDate(date)} — ${formatEventStatus(event, capacity)}`;
+      return `• ${date.format("DD/MM")} : ${formatEventStatus(event, capacity)}`;
     })
   );
 
@@ -3863,15 +3863,32 @@ function formatEventStatus(
     return event.isVacation ? "💀 Fermé (vacances)" : "🔴 Fermé";
   }
 
-  if (event.tables <= 0) {
+  const totalTables = capacity?.usesGameCapacities ? capacity.totalTables : event.tables;
+
+  if (totalTables <= 0) {
     return "🟡 À configurer — aucune table";
   }
 
-  const allocation = capacity?.usesGameCapacities
-    ? ` — ${capacity.gameTables.map((entry) => `${entry.game.label}: ${entry.tables}`).join(", ")}`
-    : "";
+  const allocation = formatGameTableAllocationSummary(capacity);
 
-  return `🟢 Disponible — ${formatTableCount(event.tables)}${allocation}`;
+  return `🟢 Disponible — ${formatTableCount(totalTables)}${allocation}`;
+}
+
+function formatGameTableAllocationSummary(
+  capacity?: Awaited<ReturnType<typeof getEventTableCapacity>>
+): string {
+  if (!capacity?.usesGameCapacities) {
+    return "";
+  }
+
+  const gameTables = capacity.gameTables.filter((entry) => entry.tables > 0);
+  if (gameTables.length === 0) {
+    return "";
+  }
+
+  return ` (${gameTables
+    .map((entry) => `${entry.game.label}: ${formatTableCount(entry.tables)}`)
+    .join(", ")})`;
 }
 
 async function buildMonthSlotsOverview(
@@ -3897,6 +3914,10 @@ async function buildMonthSlotsOverview(
   const eventByDate = new Map(
     events.map((event) => [dayjs(event.date).format("YYYY-MM-DD"), event])
   );
+  const capacityEntries = await Promise.all(
+    events.map(async (event) => [event.id, await getEventTableCapacity(prisma, event)] as const)
+  );
+  const capacityByEventId = new Map(capacityEntries);
 
   const closures = await Promise.all(
     slots.map((slotDate) =>
@@ -3918,7 +3939,7 @@ async function buildMonthSlotsOverview(
       if (closure?.closed) {
         status = "💀 Fermé (vacances)";
       } else if (event) {
-        status = formatEventStatus(event);
+        status = formatEventStatus(event, capacityByEventId.get(event.id));
       }
 
       return `• ${slotDate.format("DD/MM")} : ${status}`;

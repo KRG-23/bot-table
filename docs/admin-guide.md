@@ -18,7 +18,7 @@ L'accueil affiche :
 - jours de créneaux ;
 - jeux actifs ;
 - automatisations ;
-- tableau des créneaux enregistrés.
+- créneaux du mois, avec la répartition des tables par jeu quand elle est configurée.
 
 Le menu expire au bout de 60 secondes et remplace son contenu par :
 `💡 Les 60 secondes sont écoulées !`
