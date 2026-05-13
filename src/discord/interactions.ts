@@ -47,6 +47,7 @@ import {
   normalizeGameInput,
   resolveGameFromInput
 } from "../services/games";
+import { buildPendingValidationDm, buildPendingValidationNotice } from "../services/match-notices";
 import {
   buildMonthlySlotGenerationSummary,
   generateCurrentMonthSlots
@@ -2901,8 +2902,12 @@ async function handleMatchCreate(
   });
 
   const gameLabel = game.label;
+  const automationSettings = await getAutomationSettings(prisma);
   await interaction.editReply({
-    content: `✅ Partie enregistrée : <@${input.player1Id}> vs <@${input.player2Id}> (${gameLabel}).`,
+    content: [
+      `✅ Partie enregistrée : <@${input.player1Id}> vs <@${input.player2Id}> (${gameLabel}).`,
+      buildPendingValidationNotice(automationSettings)
+    ].join("\n"),
     components: [buildMatchActionRow(match.id)]
   });
 
@@ -2911,7 +2916,8 @@ async function handleMatchCreate(
     logger,
     match.id,
     [input.player1Id, input.player2Id],
-    gameLabel
+    gameLabel,
+    automationSettings
   );
 }
 
@@ -4291,10 +4297,11 @@ async function notifyMatchCreated(
   logger: Logger,
   matchId: number,
   playerIds: string[],
-  gameLabel: string
+  gameLabel: string,
+  automationSettings: AutomationSettings
 ): Promise<void> {
   const prisma = getPrisma();
-  const dmContent = `✅ Votre partie ${gameLabel} est enregistrée et en attente de validation.`;
+  const dmContent = buildPendingValidationDm(gameLabel, automationSettings);
 
   const results = await Promise.all(
     playerIds.map(async (discordId) => {

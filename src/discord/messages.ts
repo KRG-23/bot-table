@@ -7,7 +7,9 @@ import type { Logger } from "pino";
 
 import type { AppConfig } from "../config";
 import { getPrisma } from "../db";
+import { getAutomationSettings } from "../services/automation-settings";
 import { listActiveGames, resolveGameFromInput } from "../services/games";
+import { buildPendingValidationDm, buildPendingValidationNotice } from "../services/match-notices";
 import { getSlotDays, formatSlotDays, isSlotDay } from "../services/slots";
 import { getGameTableCapacity } from "../services/table-capacity";
 import { formatFrenchDate, parseFrenchDayMonth } from "../utils/dates";
@@ -186,8 +188,12 @@ export async function handleMatchMessage(
   });
 
   const gameLabel = game.label;
+  const automationSettings = await getAutomationSettings(prisma);
   await message.reply({
-    content: `✅ Partie enregistrée : <@${parsed.player1Id}> vs <@${parsed.player2Id}> (${gameLabel}).`,
+    content: [
+      `✅ Partie enregistrée : <@${parsed.player1Id}> vs <@${parsed.player2Id}> (${gameLabel}).`,
+      buildPendingValidationNotice(automationSettings)
+    ].join("\n"),
     components: [buildMatchActionRow(match.id)]
   });
 
@@ -196,6 +202,7 @@ export async function handleMatchMessage(
     match.id,
     [parsed.player1Id, parsed.player2Id],
     gameLabel,
+    automationSettings,
     logger
   );
 }
@@ -345,10 +352,11 @@ async function sendDmsAndStoreNotifications(
   matchId: number,
   playerIds: string[],
   gameLabel: string,
+  automationSettings: Awaited<ReturnType<typeof getAutomationSettings>>,
   logger: Logger
 ): Promise<void> {
   const prisma = getPrisma();
-  const dmContent = `✅ Votre partie ${gameLabel} est enregistrée et en attente de validation.`;
+  const dmContent = buildPendingValidationDm(gameLabel, automationSettings);
 
   const results = await Promise.all(
     playerIds.map(async (discordId) => {
