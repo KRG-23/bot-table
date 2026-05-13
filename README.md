@@ -199,6 +199,7 @@ Key vars:
 - `DATABASE_URL` — Postgres connection string
 - `BACKUP_DIR` — directory used by scheduled/manual Postgres backups (default: `data/backups`)
 - `MENTION_IN_THREAD` — default `true`/`false` value before the admin changes it in `/mu_config` > “Notifications”
+- `ALLOW_BOT_PLAYERS` — DEV/test only: allow Discord bots as players (default: `false`)
 - `LOG_LEVEL` — `info`, `debug`, etc.
 - `VACATION_ACADEMY` — academy used for school holidays (default: Nantes)
 - `ALLOW_INSECURE_TLS` — DEV only: disable TLS verification (default: false)

@@ -2811,6 +2811,10 @@ async function handleMatchCreate(
     return;
   }
 
+  if (!(await ensureBotPlayersAllowed(interaction, config, [input.player1Id, input.player2Id]))) {
+    return;
+  }
+
   const prisma = getPrisma();
   const game = await resolveGameFromInput(prisma, input.gameInput);
   if (!game) {
@@ -3936,6 +3940,30 @@ function parseUserIdInput(input: string): string | null {
   }
 
   return null;
+}
+
+async function ensureBotPlayersAllowed(
+  interaction: EphemeralInteraction,
+  config: AppConfig,
+  playerIds: string[]
+): Promise<boolean> {
+  if (config.allowBotPlayers) {
+    return true;
+  }
+
+  const users = await Promise.all(
+    playerIds.map((playerId) => interaction.client.users.fetch(playerId).catch(() => null))
+  );
+
+  if (!users.some((user) => user?.bot)) {
+    return true;
+  }
+
+  await replyEphemeral(interaction, {
+    content:
+      "⛔ Les bots ne peuvent pas être joueurs. Active `ALLOW_BOT_PLAYERS=true` en environnement de test."
+  });
+  return false;
 }
 
 async function handleMatchValidate(

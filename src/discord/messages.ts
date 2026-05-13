@@ -62,6 +62,19 @@ export async function handleMatchMessage(
     return;
   }
 
+  if (!config.allowBotPlayers) {
+    const botPlayers = [parsed.player1Id, parsed.player2Id]
+      .map((playerId) => message.mentions.users.get(playerId))
+      .filter((user) => user?.bot);
+
+    if (botPlayers.length > 0) {
+      await message.reply(
+        "⛔ Les bots ne peuvent pas être joueurs. Active `ALLOW_BOT_PLAYERS=true` en environnement de test."
+      );
+      return;
+    }
+  }
+
   const prisma = getPrisma();
   const threadContext = await findEventThreadContext(prisma, message.channel.id);
   const threadDate = threadContext

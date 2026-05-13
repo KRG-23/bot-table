@@ -10,6 +10,7 @@ export type AppConfig = {
   discordPublicKey?: string;
   adminRoleId?: string;
   mentionInThread: boolean;
+  allowBotPlayers: boolean;
   logLevel: string;
   timezone: string;
   databaseUrl?: string;
@@ -39,6 +40,7 @@ export function loadConfig(): AppConfig {
     discordPublicKey: process.env.DISCORD_PUBLIC_KEY,
     adminRoleId: process.env.ADMIN_ROLE_ID,
     mentionInThread: process.env.MENTION_IN_THREAD === "true",
+    allowBotPlayers: process.env.ALLOW_BOT_PLAYERS === "true",
     logLevel: process.env.LOG_LEVEL || "info",
     timezone: process.env.TZ || "Europe/Paris",
     databaseUrl: process.env.DATABASE_URL,
