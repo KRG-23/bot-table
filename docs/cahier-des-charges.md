@@ -23,7 +23,7 @@
    - Les créneaux partent des tables par défaut configurées sur chaque jeu ; un admin ajuste ensuite le **nombre de tables par jeu** via commande ou menu de configuration.
 
 2. **Dimanche → Mercredi**
-   - Les joueurs s’entendent et **notent le bot** dans le fil avec la mention des deux pseudos (ex. `@Bot @Joueur1 vs @Joueur2`), en indiquant le système de jeu.
+   - Les joueurs s’entendent et **notent le bot** dans le fil avec la mention des deux pseudos (ex. `@Bot @Joueur1 vs @Joueur2`). Dans un fil de soirée créé par jeu, le système de jeu est déduit automatiquement.
    - Le bot enregistre la demande en statut `en_attente` et incrémente le compteur de parties.
 
 3. **Récap parties (automatique)**
@@ -86,7 +86,7 @@
   - `/match cancel <match_id>` (joueur impliqué ou admin)
   - `/mu_config` > “Notifications” (admin) pour activer/désactiver les mentions dans les fils.
 - **Boutons avec modale** préférés
-- **Messages libres** : mention du bot dans un fil de la semaine avec deux pseudos + jeu pour créer une demande.
+- **Messages libres** : mention du bot dans un fil de la semaine avec deux pseudos pour créer une demande ; le jeu est optionnel si le fil est déjà associé à un jeu.
 
 ## 8. Non-fonctionnel
 

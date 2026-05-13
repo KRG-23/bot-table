@@ -148,6 +148,8 @@ Each generated game thread also includes admin-only buttons:
 - `Tables` — update the table count for this game only
 - `Confirmer` — validate pending matches for this game up to the available capacity
 
+In a generated game thread, players can create a match with `@Munitorum @Joueur1 vs @Joueur2`; the game is inferred from the thread. Adding the game at the end still works when it matches the thread.
+
 ## Automations
 
 When the bot is ready, it schedules the next automation runs in `TZ` (default `Europe/Paris`) without polling continuously. The schedule is configurable from `/mu_config` > “Automatisations”; saved changes refresh the in-memory scheduler.

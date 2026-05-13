@@ -1,3 +1,4 @@
+import type { Game } from "@prisma/client";
 import { NotificationType } from "@prisma/client";
 import dayjs from "dayjs";
 import type { Message } from "discord.js";
@@ -12,12 +13,12 @@ import { getGameTableCapacity } from "../services/table-capacity";
 import { formatFrenchDate, parseFrenchDayMonth } from "../utils/dates";
 
 const BASE_USAGE =
-  "Format attendu : @Munitorum @Joueur1 vs @Joueur2 <jeu> (ex: @Munitorum @Alice vs @Bob 40k).";
+  "Format attendu : @Munitorum @Joueur1 vs @Joueur2 [jeu]. Dans un fil de soirée, le jeu est déduit automatiquement.";
 
 type ParsedMatch = {
   player1Id: string;
   player2Id: string;
-  gameInput: string;
+  gameInput?: string;
 };
 
 export async function handleMatchMessage(
@@ -59,15 +60,19 @@ export async function handleMatchMessage(
     return;
   }
 
-  const threadDate = resolveThreadDate(message.channel.name, config.timezone);
+  const prisma = getPrisma();
+  const threadContext = await findEventThreadContext(prisma, message.channel.id);
+  const threadDate = threadContext
+    ? dayjs(threadContext.event.date).tz(config.timezone).startOf("day")
+    : resolveThreadDate(message.channel.name, config.timezone);
+
   if (!threadDate) {
     await message.reply(
-      "❌ Impossible de lire la date du fil. Utilise un format du type “Soirée 40k - 23 janvier”."
+      "❌ Impossible de lire la date du fil. Utilise un fil créé par Munitorum ou un nom du type “Soirée 40k le 23 janvier”."
     );
     return;
   }
 
-  const prisma = getPrisma();
   const games = await listActiveGames(prisma);
 
   if (!games.length) {
@@ -75,20 +80,41 @@ export async function handleMatchMessage(
     return;
   }
 
-  if (
-    !message.channel.parentId ||
-    !games.some((gameItem) => gameItem.channelId === message.channel.parentId)
-  ) {
+  const parentGames = message.channel.parentId
+    ? games.filter((gameItem) => gameItem.channelId === message.channel.parentId)
+    : [];
+
+  if (!threadContext && parentGames.length === 0) {
     return;
   }
 
-  const game = await resolveGameFromInput(prisma, parsed.gameInput);
+  const game = await resolveMessageGame(prisma, parsed, parentGames, threadContext?.game);
 
   if (!game) {
+    if (!parsed.gameInput && parentGames.length > 1) {
+      await message.reply(
+        "❌ Plusieurs jeux utilisent ce canal. Précise le jeu à la fin du message."
+      );
+      return;
+    }
+
     const gameList = games.map((item) => item.label).join(", ");
     await message.reply(`❌ Jeu invalide. Jeux disponibles : ${gameList}.`);
     return;
   }
+
+  if (threadContext && game.id !== threadContext.gameId) {
+    await message.reply(
+      `❌ Ce fil est réservé à ${threadContext.game.label}. Retire le jeu du message ou utilise ${threadContext.game.label}.`
+    );
+    return;
+  }
+
+  if (!game.active) {
+    await message.reply(`❌ Le jeu ${game.label} est désactivé.`);
+    return;
+  }
+
   const slotDays = await getSlotDays(prisma);
 
   if (!isSlotDay(threadDate, slotDays)) {
@@ -99,7 +125,7 @@ export async function handleMatchMessage(
     );
     return;
   }
-  const event = await findEventForDate(prisma, threadDate);
+  const event = threadContext?.event ?? (await findEventForDate(prisma, threadDate));
   if (!event) {
     await message.reply(
       `❌ Aucune soirée trouvée pour le ${formatFrenchDate(
@@ -201,7 +227,10 @@ function buildMatchActionRow(matchId: number) {
 }
 
 function parseMatchMessage(content: string, botId: string): ParsedMatch | null {
-  const pattern = new RegExp(`<@!?${botId}>\\s+<@!?([0-9]+)>\\s+vs\\s+<@!?([0-9]+)>\\s+(.+)`, "i");
+  const pattern = new RegExp(
+    `^\\s*<@!?${botId}>\\s+<@!?([0-9]+)>\\s+(?:vs|contre)\\s+<@!?([0-9]+)>(?:\\s+(.+))?\\s*$`,
+    "i"
+  );
   const match = content.match(pattern);
   if (!match) {
     return null;
@@ -209,9 +238,36 @@ function parseMatchMessage(content: string, botId: string): ParsedMatch | null {
 
   const player1Id = match[1];
   const player2Id = match[2];
-  const gameInput = match[3].trim();
+  const gameInput = match[3]?.trim();
 
-  return { player1Id, player2Id, gameInput };
+  return gameInput ? { player1Id, player2Id, gameInput } : { player1Id, player2Id };
+}
+
+async function resolveMessageGame(
+  prisma: ReturnType<typeof getPrisma>,
+  parsed: ParsedMatch,
+  parentGames: Game[],
+  threadGame?: Game
+): Promise<Game | null> {
+  if (parsed.gameInput) {
+    return resolveGameFromInput(prisma, parsed.gameInput);
+  }
+
+  if (threadGame) {
+    return threadGame;
+  }
+
+  return parentGames.length === 1 ? parentGames[0] : null;
+}
+
+function findEventThreadContext(prisma: ReturnType<typeof getPrisma>, threadId: string) {
+  return prisma.eventThread.findFirst({
+    where: { threadId },
+    include: {
+      event: true,
+      game: true
+    }
+  });
 }
 
 function resolveThreadDate(name: string, tz: string): dayjs.Dayjs | null {
