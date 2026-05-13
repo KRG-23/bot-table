@@ -227,20 +227,39 @@ function buildMatchActionRow(matchId: number) {
 }
 
 function parseMatchMessage(content: string, botId: string): ParsedMatch | null {
-  const pattern = new RegExp(
-    `^\\s*<@!?${botId}>\\s+<@!?([0-9]+)>\\s+(?:vs|contre)\\s+<@!?([0-9]+)>(?:\\s+(.+))?\\s*$`,
-    "i"
-  );
-  const match = content.match(pattern);
-  if (!match) {
+  const mentions = [...content.matchAll(/<@!?([0-9]+)>/g)].map((match) => ({
+    id: match[1],
+    index: match.index ?? 0,
+    end: (match.index ?? 0) + match[0].length
+  }));
+
+  if (!mentions.some((mention) => mention.id === botId)) {
     return null;
   }
 
-  const player1Id = match[1];
-  const player2Id = match[2];
-  const gameInput = match[3]?.trim();
+  const players = mentions.filter((mention) => mention.id !== botId);
+  const separator = /\b(?:vs|contre)\b/i;
 
-  return gameInput ? { player1Id, player2Id, gameInput } : { player1Id, player2Id };
+  for (let index = 0; index < players.length - 1; index += 1) {
+    const player1 = players[index];
+    const player2 = players[index + 1];
+    const betweenPlayers = content.slice(player1.end, player2.index);
+
+    if (!separator.test(betweenPlayers)) {
+      continue;
+    }
+
+    const gameInput = content
+      .slice(player2.end)
+      .replace(new RegExp(`<@!?${botId}>`, "g"), "")
+      .trim();
+
+    return gameInput
+      ? { player1Id: player1.id, player2Id: player2.id, gameInput }
+      : { player1Id: player1.id, player2Id: player2.id };
+  }
+
+  return null;
 }
 
 async function resolveMessageGame(
