@@ -1,7 +1,7 @@
 FROM node:20-bookworm-slim AS base
 WORKDIR /usr/src/app
 RUN apt-get update -y \
-  && apt-get install -y openssl ca-certificates \
+  && apt-get install -y openssl ca-certificates postgresql-client \
   && update-ca-certificates \
   && rm -rf /var/lib/apt/lists/*
 
@@ -21,8 +21,7 @@ COPY tsconfig.json ./
 COPY src ./src
 RUN npm run build
 
-FROM node:20-bookworm-slim AS prod
-WORKDIR /usr/src/app
+FROM base AS prod
 ENV NODE_ENV=production
 COPY --from=deps /usr/src/app/package*.json ./
 COPY --from=deps /usr/src/app/node_modules ./node_modules

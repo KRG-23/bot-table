@@ -55,9 +55,9 @@
 - [x] Skip vacances/veille vacances + message d’info
 - [x] Job “mercredi 21h” : récap + auto-validation si capacité OK
 - [x] Paramétrage admin du jour, de l’heure et de la fenêtre d’analyse
-- [ ] Job “vendredi 17h” : notifications finales
-- [ ] Job “samedi 23h” : backup + rétention 1 mois
-- [ ] Script backup Postgres + purge old dumps
+- [x] Job “vendredi 17h” : notifications finales
+- [x] Job “samedi 23h” : backup + rétention 1 mois
+- [x] Script backup Postgres + purge old dumps
   - [x] Bloquant : définir le moteur de scheduling (scheduler interne à prochaine exécution)
 
 ## Phase 6 — Notifications & règles métier
@@ -83,7 +83,7 @@
 
 - [ ] Dockerfile prod final + migrations auto
 - [ ] `docker-compose` prod (bot + postgres + volumes)
-- [ ] Scripts npm (`dev`, `build`, `start`, `backup`)
+- [x] Scripts npm (`dev`, `build`, `start`, `backup`)
 - [ ] README setup + guide d’exploitation (backup/restore)
 - [ ] Manuel admin Discord
 

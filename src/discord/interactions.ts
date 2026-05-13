@@ -24,6 +24,7 @@ import {
   formatWeekday,
   getAutomationSettings,
   parseLookaheadInput,
+  parseRetentionDaysInput,
   parseTimeInput,
   parseWeekInput,
   parseWeekdayInput,
@@ -2510,9 +2511,12 @@ async function handleAutomationSettingsUpdate(
       content: [
         "❌ Paramètres invalides.",
         "- Jour : nom français ou numéro 0-6 (0 = dimanche)",
-        "- Semaine du mois : 1 à 4",
+        "- Génération mensuelle : `dimanche, 1, 09:00`",
+        "- Récap parties : `mercredi, 21:00, 7`",
+        "- Notifications finales : `vendredi, 17:00`",
+        "- Backup : `samedi, 23:00, 30`",
         "- Heure : HH:MM ou HHhMM",
-        "- Fenêtre d'analyse : 1 à 30 jours, ex. `21:00, 7`"
+        "- Fenêtre : 1 à 30 jours ; rétention backup : 1 à 365 jours"
       ].join("\n")
     });
     return;
@@ -2531,50 +2535,114 @@ async function handleAutomationSettingsUpdate(
 function parseAutomationSettingsFromModal(
   interaction: ModalSubmitInteraction
 ): AutomationSettings | null {
-  const monthlyWeekday = parseWeekdayInput(interaction.fields.getTextInputValue("monthly_weekday"));
-  const monthlyWeek = parseWeekInput(interaction.fields.getTextInputValue("monthly_week"));
-  const monthlyTime = parseTimeInput(interaction.fields.getTextInputValue("monthly_time"));
-  const weeklyReviewWeekday = parseWeekdayInput(
-    interaction.fields.getTextInputValue("review_weekday")
+  const monthly = parseMonthlyScheduleInput(
+    interaction.fields.getTextInputValue("monthly_schedule")
   );
-  const reviewWindow = parseReviewTimeWindowInput(
-    interaction.fields.getTextInputValue("review_time_window")
+  const review = parseReviewScheduleInput(interaction.fields.getTextInputValue("review_schedule"));
+  const finalNotification = parseWeekdayTimeInput(
+    interaction.fields.getTextInputValue("final_notification_schedule")
   );
+  const backup = parseBackupScheduleInput(interaction.fields.getTextInputValue("backup_schedule"));
 
-  if (
-    monthlyWeekday === null ||
-    monthlyWeek === null ||
-    monthlyTime === null ||
-    weeklyReviewWeekday === null ||
-    reviewWindow === null
-  ) {
+  if (!monthly || !review || !finalNotification || !backup) {
     return null;
   }
 
   return {
-    monthlyWeekday,
-    monthlyWeek,
-    monthlyTime,
-    weeklyReviewWeekday,
-    weeklyReviewTime: reviewWindow.time,
-    weeklyReviewLookaheadDays: reviewWindow.lookaheadDays
+    monthlyWeekday: monthly.weekday,
+    monthlyWeek: monthly.week,
+    monthlyTime: monthly.time,
+    weeklyReviewWeekday: review.weekday,
+    weeklyReviewTime: review.time,
+    weeklyReviewLookaheadDays: review.lookaheadDays,
+    finalNotificationWeekday: finalNotification.weekday,
+    finalNotificationTime: finalNotification.time,
+    backupWeekday: backup.weekday,
+    backupTime: backup.time,
+    backupRetentionDays: backup.retentionDays
   };
 }
 
-function parseReviewTimeWindowInput(input: string): { time: string; lookaheadDays: number } | null {
-  const match = input.trim().match(/^(.+?)(?:[,;]|\s+)(\d{1,2})$/);
-  if (!match) {
+function splitScheduleInput(input: string, expectedParts: number): string[] | null {
+  const parts = input
+    .split(/[,;]+/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  return parts.length === expectedParts ? parts : null;
+}
+
+function parseMonthlyScheduleInput(
+  input: string
+): { weekday: number; week: number; time: string } | null {
+  const parts = splitScheduleInput(input, 3);
+  if (!parts) {
     return null;
   }
 
-  const time = parseTimeInput(match[1]);
-  const lookaheadDays = parseLookaheadInput(match[2]);
+  const weekday = parseWeekdayInput(parts[0]);
+  const week = parseWeekInput(parts[1]);
+  const time = parseTimeInput(parts[2]);
 
-  if (!time || lookaheadDays === null) {
+  if (weekday === null || week === null || !time) {
     return null;
   }
 
-  return { time, lookaheadDays };
+  return { weekday, week, time };
+}
+
+function parseReviewScheduleInput(
+  input: string
+): { weekday: number; time: string; lookaheadDays: number } | null {
+  const parts = splitScheduleInput(input, 3);
+  if (!parts) {
+    return null;
+  }
+
+  const weekday = parseWeekdayInput(parts[0]);
+  const time = parseTimeInput(parts[1]);
+  const lookaheadDays = parseLookaheadInput(parts[2]);
+
+  if (weekday === null || !time || lookaheadDays === null) {
+    return null;
+  }
+
+  return { weekday, time, lookaheadDays };
+}
+
+function parseWeekdayTimeInput(input: string): { weekday: number; time: string } | null {
+  const parts = splitScheduleInput(input, 2);
+  if (!parts) {
+    return null;
+  }
+
+  const weekday = parseWeekdayInput(parts[0]);
+  const time = parseTimeInput(parts[1]);
+
+  if (weekday === null || !time) {
+    return null;
+  }
+
+  return { weekday, time };
+}
+
+function parseBackupScheduleInput(
+  input: string
+): { weekday: number; time: string; retentionDays: number } | null {
+  const parts = splitScheduleInput(input, 3);
+  if (!parts) {
+    return null;
+  }
+
+  const weekday = parseWeekdayInput(parts[0]);
+  const time = parseTimeInput(parts[1]);
+  const retentionDays = parseRetentionDaysInput(parts[2]);
+
+  if (weekday === null || !time || retentionDays === null) {
+    return null;
+  }
+
+  return { weekday, time, retentionDays };
 }
 
 async function handleDeleteDateConfirm(
@@ -4329,12 +4397,14 @@ async function showAutomationSettingsModal(
         components: [
           {
             type: 4,
-            custom_id: "monthly_weekday",
-            label: "Jour génération mensuelle",
+            custom_id: "monthly_schedule",
+            label: "Mensuel : jour, semaine, heure",
             style: TextInputStyle.Short,
             required: true,
-            value: formatWeekday(settings.monthlyWeekday),
-            placeholder: "dimanche"
+            value: `${formatWeekday(settings.monthlyWeekday)}, ${settings.monthlyWeek}, ${
+              settings.monthlyTime
+            }`,
+            placeholder: "dimanche, 1, 09:00"
           }
         ]
       },
@@ -4343,12 +4413,14 @@ async function showAutomationSettingsModal(
         components: [
           {
             type: 4,
-            custom_id: "monthly_week",
-            label: "Semaine du mois (1 à 4)",
+            custom_id: "review_schedule",
+            label: "Récap : jour, heure, fenêtre",
             style: TextInputStyle.Short,
             required: true,
-            value: String(settings.monthlyWeek),
-            placeholder: "1"
+            value: `${formatWeekday(settings.weeklyReviewWeekday)}, ${settings.weeklyReviewTime}, ${
+              settings.weeklyReviewLookaheadDays
+            }`,
+            placeholder: "mercredi, 21:00, 7"
           }
         ]
       },
@@ -4357,12 +4429,14 @@ async function showAutomationSettingsModal(
         components: [
           {
             type: 4,
-            custom_id: "monthly_time",
-            label: "Heure génération mensuelle",
+            custom_id: "final_notification_schedule",
+            label: "Notifications finales : jour, heure",
             style: TextInputStyle.Short,
             required: true,
-            value: settings.monthlyTime,
-            placeholder: "09:00"
+            value: `${formatWeekday(settings.finalNotificationWeekday)}, ${
+              settings.finalNotificationTime
+            }`,
+            placeholder: "vendredi, 17:00"
           }
         ]
       },
@@ -4371,26 +4445,14 @@ async function showAutomationSettingsModal(
         components: [
           {
             type: 4,
-            custom_id: "review_weekday",
-            label: "Jour du récap parties",
+            custom_id: "backup_schedule",
+            label: "Backup : jour, heure, rétention",
             style: TextInputStyle.Short,
             required: true,
-            value: formatWeekday(settings.weeklyReviewWeekday),
-            placeholder: "mercredi"
-          }
-        ]
-      },
-      {
-        type: 1,
-        components: [
-          {
-            type: 4,
-            custom_id: "review_time_window",
-            label: "Récap : heure, fenêtre jours",
-            style: TextInputStyle.Short,
-            required: true,
-            value: `${settings.weeklyReviewTime}, ${settings.weeklyReviewLookaheadDays}`,
-            placeholder: "21:00, 7"
+            value: `${formatWeekday(settings.backupWeekday)}, ${settings.backupTime}, ${
+              settings.backupRetentionDays
+            }`,
+            placeholder: "samedi, 23:00, 30"
           }
         ]
       }

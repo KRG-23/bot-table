@@ -37,6 +37,9 @@
 5. **Vendredi 17h (automatique)**
    - Notification finale aux joueurs dont la partie est validée.
 
+6. **Samedi 23h (automatique)**
+   - Backup Postgres avec purge des dumps de plus de 30 jours par défaut.
+
 ## 4. Exigences fonctionnelles
 
 - **Collecte des tables** : commande admin pour saisir/modifier le nombre de tables par jeu d’un vendredi. Les valeurs par défaut de chaque jeu servent à préremplir les nouveaux créneaux. La table Billard n’a pas de traitement spécial autre que d’être comptée dans le jeu choisi.

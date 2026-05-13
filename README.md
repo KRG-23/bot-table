@@ -14,7 +14,7 @@ Munitorum is a Discord bot for tabletop reservations (Warhammer 40k / AoS / Kill
 - Match submissions + validation/refusal/cancellation (buttons + `/mu_match`)
 - Config menu with category selector (créneaux / jeux & tables / parties / automatisations)
 - Automatic monthly slot generation on the first Sunday of the month
-- PostgreSQL persistence + backups (planned)
+- PostgreSQL persistence + scheduled backups
 
 ## Requirements
 
@@ -160,11 +160,18 @@ Monthly slot generation runs by default on the first Sunday of the month at 09:0
 
 Weekly match review runs by default every Wednesday at 21:00. It reviews open slots for the configured window (7 days by default), auto-validates pending matches when validated + pending matches fit within the available tables for their game, sends player DMs, and posts a recap in `DISCORD_CHANNEL_ID`.
 
+Final player notifications run by default every Friday at 17:00. They DM players with validated matches for the current day and post a summary in `DISCORD_CHANNEL_ID`.
+
+Postgres backups run by default every Saturday at 23:00. The bot runs `pg_dump` into `BACKUP_DIR` and purges managed backups older than the configured retention.
+
 Default automation values:
 
 - monthly slot generation: first Sunday, 09:00
 - weekly match review: Wednesday, 21:00
 - review window: 7 days
+- final notifications: Friday, 17:00
+- Postgres backup: Saturday, 23:00
+- backup retention: 30 days
 
 ## Scenarios (slash + buttons parity)
 
@@ -188,6 +195,7 @@ Key vars:
 - `DISCORD_APP_ID` — application ID
 - `ADMIN_ROLE_ID` — role ID allowed to manage tables (optional; defaults to server admin)
 - `DATABASE_URL` — Postgres connection string
+- `BACKUP_DIR` — directory used by scheduled/manual Postgres backups (default: `data/backups`)
 - `MENTION_IN_THREAD` — `true`/`false`
 - `LOG_LEVEL` — `info`, `debug`, etc.
 - `VACATION_ACADEMY` — academy used for school holidays (default: Nantes)
@@ -197,6 +205,7 @@ Key vars:
 
 - The Postgres host port is mapped to **5433** to avoid conflicts with other local instances.
 - If you want to use 5432, edit `docker-compose.yml`.
+- Manual backup: `npm run backup`.
 
 ## Project structure
 

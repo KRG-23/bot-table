@@ -8,14 +8,19 @@ import { getPrisma } from "../db";
 import {
   type AutomationSettings,
   buildMonthlyAutomationRunDate,
+  buildWeeklyAutomationRunDate,
   buildWeeklyReviewRunDate,
   getAutomationSettings
 } from "./automation-settings";
+import { buildPostgresBackupSummary, runPostgresBackup } from "./backups";
+import { buildFinalNotificationSummary, sendFinalMatchNotifications } from "./final-notifications";
 import { buildWeeklyMatchReviewSummary, reviewUpcomingMatches } from "./match-review";
 import { buildMonthlySlotGenerationSummary, generateCurrentMonthSlots } from "./monthly-slots";
 
 const MONTHLY_SLOTS_LAST_RUN_SETTING = "monthly_slots_last_auto_run";
 const WEEKLY_MATCH_REVIEW_LAST_RUN_SETTING = "weekly_match_review_last_auto_run";
+const FINAL_NOTIFICATIONS_LAST_RUN_SETTING = "final_notifications_last_auto_run";
+const POSTGRES_BACKUP_LAST_RUN_SETTING = "postgres_backup_last_auto_run";
 const MAX_TIMEOUT_MS = 24 * 60 * 60 * 1000;
 let schedulerGeneration = 0;
 const scheduledTimeouts = new Set<NodeJS.Timeout>();
@@ -84,6 +89,28 @@ function planSchedulerJobs(
     },
     generation
   );
+
+  scheduleJob(
+    config,
+    logger,
+    "final_notifications",
+    () => getNextFinalNotificationsRun(config),
+    async () => {
+      await maybeSendFinalNotifications(client, config, logger);
+    },
+    generation
+  );
+
+  scheduleJob(
+    config,
+    logger,
+    "postgres_backup",
+    () => getNextPostgresBackupRun(config),
+    async () => {
+      await maybeRunPostgresBackup(client, config, logger);
+    },
+    generation
+  );
 }
 
 function clearScheduledTimeouts(): void {
@@ -106,6 +133,17 @@ async function runStartupCatchUp(client: Client, config: AppConfig, logger: Logg
     isAtOrAfterTime(now, settings.weeklyReviewTime)
   ) {
     await maybeReviewUpcomingMatches(client, config, logger);
+  }
+
+  if (
+    now.day() === settings.finalNotificationWeekday &&
+    isAtOrAfterTime(now, settings.finalNotificationTime)
+  ) {
+    await maybeSendFinalNotifications(client, config, logger);
+  }
+
+  if (now.day() === settings.backupWeekday && isAtOrAfterTime(now, settings.backupTime)) {
+    await maybeRunPostgresBackup(client, config, logger);
   }
 }
 
@@ -182,6 +220,24 @@ async function getNextMonthlySlotsRun(config: AppConfig): Promise<dayjs.Dayjs> {
 async function getNextWeeklyMatchReviewRun(config: AppConfig): Promise<dayjs.Dayjs> {
   const settings = await getAutomationSettings(getPrisma());
   return buildWeeklyReviewRunDate(dayjs().tz(config.timezone), settings);
+}
+
+async function getNextFinalNotificationsRun(config: AppConfig): Promise<dayjs.Dayjs> {
+  const settings = await getAutomationSettings(getPrisma());
+  return buildWeeklyAutomationRunDate(
+    dayjs().tz(config.timezone),
+    settings.finalNotificationWeekday,
+    settings.finalNotificationTime
+  );
+}
+
+async function getNextPostgresBackupRun(config: AppConfig): Promise<dayjs.Dayjs> {
+  const settings = await getAutomationSettings(getPrisma());
+  return buildWeeklyAutomationRunDate(
+    dayjs().tz(config.timezone),
+    settings.backupWeekday,
+    settings.backupTime
+  );
 }
 
 async function maybeGenerateMonthlySlots(
@@ -267,6 +323,75 @@ async function maybeReviewUpcomingMatches(
     buildWeeklyMatchReviewSummary(result, settings.weeklyReviewLookaheadDays)
   );
   logger.info({ runKey, result }, "Weekly match review completed");
+}
+
+async function maybeSendFinalNotifications(
+  client: Client,
+  config: AppConfig,
+  logger: Logger
+): Promise<void> {
+  const now = dayjs().tz(config.timezone);
+  const runKey = now.format("YYYY-MM-DD");
+  const prisma = getPrisma();
+  const lastRun = await prisma.setting.findUnique({
+    where: { key: FINAL_NOTIFICATIONS_LAST_RUN_SETTING }
+  });
+
+  if (lastRun?.value === runKey) {
+    return;
+  }
+
+  logger.info({ runKey }, "Starting final match notifications");
+  const result = await sendFinalMatchNotifications(client, config, logger);
+
+  await prisma.setting.upsert({
+    where: { key: FINAL_NOTIFICATIONS_LAST_RUN_SETTING },
+    create: {
+      key: FINAL_NOTIFICATIONS_LAST_RUN_SETTING,
+      value: runKey
+    },
+    update: {
+      value: runKey
+    }
+  });
+
+  await sendScheduledSummary(client, config, logger, buildFinalNotificationSummary(result));
+  logger.info({ runKey, result }, "Final match notifications completed");
+}
+
+async function maybeRunPostgresBackup(
+  client: Client,
+  config: AppConfig,
+  logger: Logger
+): Promise<void> {
+  const now = dayjs().tz(config.timezone);
+  const runKey = now.format("YYYY-MM-DD");
+  const prisma = getPrisma();
+  const settings = await getAutomationSettings(prisma);
+  const lastRun = await prisma.setting.findUnique({
+    where: { key: POSTGRES_BACKUP_LAST_RUN_SETTING }
+  });
+
+  if (lastRun?.value === runKey) {
+    return;
+  }
+
+  logger.info({ runKey, retentionDays: settings.backupRetentionDays }, "Starting Postgres backup");
+  const result = await runPostgresBackup(config, logger, settings.backupRetentionDays);
+
+  await prisma.setting.upsert({
+    where: { key: POSTGRES_BACKUP_LAST_RUN_SETTING },
+    create: {
+      key: POSTGRES_BACKUP_LAST_RUN_SETTING,
+      value: runKey
+    },
+    update: {
+      value: runKey
+    }
+  });
+
+  await sendScheduledSummary(client, config, logger, buildPostgresBackupSummary(result));
+  logger.info({ runKey, result }, "Postgres backup completed");
 }
 
 function isMonthlyAutomationDay(now: dayjs.Dayjs, settings: AutomationSettings): boolean {

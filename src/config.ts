@@ -13,6 +13,7 @@ export type AppConfig = {
   logLevel: string;
   timezone: string;
   databaseUrl?: string;
+  backupDir: string;
   vacationAcademy: string;
   allowInsecureTls: boolean;
   dnsResultOrder: "ipv4first" | "ipv6first" | "verbatim";
@@ -41,6 +42,7 @@ export function loadConfig(): AppConfig {
     logLevel: process.env.LOG_LEVEL || "info",
     timezone: process.env.TZ || "Europe/Paris",
     databaseUrl: process.env.DATABASE_URL,
+    backupDir: process.env.BACKUP_DIR || "data/backups",
     vacationAcademy: process.env.VACATION_ACADEMY || "Nantes",
     allowInsecureTls: process.env.ALLOW_INSECURE_TLS === "true",
     dnsResultOrder: resolveDnsResultOrder(process.env.DNS_RESULT_ORDER),

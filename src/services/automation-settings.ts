@@ -7,7 +7,12 @@ export const AUTOMATION_SETTINGS_KEYS = {
   monthlyTime: "automation_monthly_slots_time",
   weeklyReviewWeekday: "automation_weekly_review_weekday",
   weeklyReviewTime: "automation_weekly_review_time",
-  weeklyReviewLookaheadDays: "automation_weekly_review_lookahead_days"
+  weeklyReviewLookaheadDays: "automation_weekly_review_lookahead_days",
+  finalNotificationWeekday: "automation_final_notification_weekday",
+  finalNotificationTime: "automation_final_notification_time",
+  backupWeekday: "automation_backup_weekday",
+  backupTime: "automation_backup_time",
+  backupRetentionDays: "automation_backup_retention_days"
 } as const;
 
 export type AutomationSettings = {
@@ -17,6 +22,11 @@ export type AutomationSettings = {
   weeklyReviewWeekday: number;
   weeklyReviewTime: string;
   weeklyReviewLookaheadDays: number;
+  finalNotificationWeekday: number;
+  finalNotificationTime: string;
+  backupWeekday: number;
+  backupTime: string;
+  backupRetentionDays: number;
 };
 
 export const DEFAULT_AUTOMATION_SETTINGS: AutomationSettings = {
@@ -25,7 +35,12 @@ export const DEFAULT_AUTOMATION_SETTINGS: AutomationSettings = {
   monthlyTime: "09:00",
   weeklyReviewWeekday: 3,
   weeklyReviewTime: "21:00",
-  weeklyReviewLookaheadDays: 7
+  weeklyReviewLookaheadDays: 7,
+  finalNotificationWeekday: 5,
+  finalNotificationTime: "17:00",
+  backupWeekday: 6,
+  backupTime: "23:00",
+  backupRetentionDays: 30
 };
 
 const WEEKDAY_LABELS = ["dimanche", "lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi"];
@@ -57,7 +72,13 @@ export function formatAutomationSettings(settings: AutomationSettings): string[]
       settings.monthlyWeekday
     )} du mois à ${settings.monthlyTime}`,
     `Récap parties : ${formatWeekday(settings.weeklyReviewWeekday)} à ${settings.weeklyReviewTime}`,
-    `Fenêtre d'analyse : ${settings.weeklyReviewLookaheadDays} jour(s)`
+    `Fenêtre d'analyse : ${settings.weeklyReviewLookaheadDays} jour(s)`,
+    `Notifications finales : ${formatWeekday(settings.finalNotificationWeekday)} à ${
+      settings.finalNotificationTime
+    }`,
+    `Backup Postgres : ${formatWeekday(settings.backupWeekday)} à ${
+      settings.backupTime
+    }, rétention ${settings.backupRetentionDays} jour(s)`
   ];
 }
 
@@ -100,6 +121,14 @@ export function parseLookaheadInput(input: string): number | null {
   return value;
 }
 
+export function parseRetentionDaysInput(input: string): number | null {
+  const value = Number(input.trim());
+  if (!Number.isInteger(value) || value < 1 || value > 365) {
+    return null;
+  }
+  return value;
+}
+
 export function buildMonthlyAutomationRunDate(
   now: dayjs.Dayjs,
   settings: AutomationSettings
@@ -126,13 +155,16 @@ export function buildWeeklyReviewRunDate(
   now: dayjs.Dayjs,
   settings: AutomationSettings
 ): dayjs.Dayjs {
-  const [hour, minute] = settings.weeklyReviewTime.split(":").map(Number);
-  let candidate = now
-    .day(settings.weeklyReviewWeekday)
-    .hour(hour)
-    .minute(minute)
-    .second(0)
-    .millisecond(0);
+  return buildWeeklyAutomationRunDate(now, settings.weeklyReviewWeekday, settings.weeklyReviewTime);
+}
+
+export function buildWeeklyAutomationRunDate(
+  now: dayjs.Dayjs,
+  weekday: number,
+  time: string
+): dayjs.Dayjs {
+  const [hour, minute] = time.split(":").map(Number);
+  let candidate = now.day(weekday).hour(hour).minute(minute).second(0).millisecond(0);
 
   if (!candidate.isAfter(now)) {
     candidate = candidate.add(7, "day");
@@ -167,7 +199,22 @@ export async function getAutomationSettings(prisma: PrismaClient): Promise<Autom
       DEFAULT_AUTOMATION_SETTINGS.weeklyReviewTime,
     weeklyReviewLookaheadDays:
       parseLookaheadInput(values.get(AUTOMATION_SETTINGS_KEYS.weeklyReviewLookaheadDays) ?? "") ??
-      DEFAULT_AUTOMATION_SETTINGS.weeklyReviewLookaheadDays
+      DEFAULT_AUTOMATION_SETTINGS.weeklyReviewLookaheadDays,
+    finalNotificationWeekday:
+      parseWeekdayInput(values.get(AUTOMATION_SETTINGS_KEYS.finalNotificationWeekday) ?? "") ??
+      DEFAULT_AUTOMATION_SETTINGS.finalNotificationWeekday,
+    finalNotificationTime:
+      parseTimeInput(values.get(AUTOMATION_SETTINGS_KEYS.finalNotificationTime) ?? "") ??
+      DEFAULT_AUTOMATION_SETTINGS.finalNotificationTime,
+    backupWeekday:
+      parseWeekdayInput(values.get(AUTOMATION_SETTINGS_KEYS.backupWeekday) ?? "") ??
+      DEFAULT_AUTOMATION_SETTINGS.backupWeekday,
+    backupTime:
+      parseTimeInput(values.get(AUTOMATION_SETTINGS_KEYS.backupTime) ?? "") ??
+      DEFAULT_AUTOMATION_SETTINGS.backupTime,
+    backupRetentionDays:
+      parseRetentionDaysInput(values.get(AUTOMATION_SETTINGS_KEYS.backupRetentionDays) ?? "") ??
+      DEFAULT_AUTOMATION_SETTINGS.backupRetentionDays
   };
 }
 
@@ -189,6 +236,23 @@ export async function saveAutomationSettings(
       prisma,
       AUTOMATION_SETTINGS_KEYS.weeklyReviewLookaheadDays,
       String(settings.weeklyReviewLookaheadDays)
+    ),
+    upsertSetting(
+      prisma,
+      AUTOMATION_SETTINGS_KEYS.finalNotificationWeekday,
+      String(settings.finalNotificationWeekday)
+    ),
+    upsertSetting(
+      prisma,
+      AUTOMATION_SETTINGS_KEYS.finalNotificationTime,
+      settings.finalNotificationTime
+    ),
+    upsertSetting(prisma, AUTOMATION_SETTINGS_KEYS.backupWeekday, String(settings.backupWeekday)),
+    upsertSetting(prisma, AUTOMATION_SETTINGS_KEYS.backupTime, settings.backupTime),
+    upsertSetting(
+      prisma,
+      AUTOMATION_SETTINGS_KEYS.backupRetentionDays,
+      String(settings.backupRetentionDays)
     )
   ]);
 }
