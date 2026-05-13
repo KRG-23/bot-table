@@ -2,6 +2,9 @@
 
 ## Déploiement production
 
+Avant le premier démarrage, configurer l'application Discord avec les bons
+scopes, permissions et intents. Voir `docs/discord-application.md`.
+
 1. Préparer l'environnement :
 
 ```bash

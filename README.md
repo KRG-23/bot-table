@@ -37,6 +37,10 @@ Fill in at least:
 - `DISCORD_CHANNEL_ID`
 - `DISCORD_APP_ID`
 
+See `docs/discord-application.md` for the Discord Developer Portal setup,
+OAuth2 permissions, required intents, legal URLs, and common installation
+errors.
+
 `COMPOSE_PROJECT_NAME` controls Docker resource names. The default dev stack uses
 `otto-table-dev`, which creates an isolated Postgres volume
 (`otto-table-dev_otto_postgres_data`) and leaves older `bot-table` volumes untouched.
