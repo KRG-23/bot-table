@@ -83,11 +83,11 @@
 
 ## Phase 8 — Packaging & docs
 
-- [ ] Dockerfile prod final + migrations auto
-- [ ] `docker-compose` prod (bot + postgres + volumes)
+- [x] Dockerfile prod final + migrations auto
+- [x] `docker-compose` prod (bot + postgres + volumes)
 - [x] Scripts npm (`dev`, `build`, `start`, `backup`)
-- [ ] README setup + guide d’exploitation (backup/restore)
-- [ ] Manuel admin Discord
+- [x] README setup + guide d’exploitation (backup/restore)
+- [x] Manuel admin Discord
 
 ## Phase 9 — Vérifications finales
 

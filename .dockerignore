@@ -1,0 +1,11 @@
+node_modules
+dist
+.git
+.env*
+data/backups
+npm-debug.log*
+yarn-error.log*
+.DS_Store
+.codex
+.vscode
+*.code-workspace

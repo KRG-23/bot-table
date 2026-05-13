@@ -1,0 +1,46 @@
+services:
+  bot:
+    build:
+      context: .
+      target: prod
+    image: munitorum-bot:prod
+    env_file:
+      - ${MUNITORUM_ENV_FILE:-.env.prod}
+    dns:
+      - ${DNS_PRIMARY:-1.1.1.1}
+      - ${DNS_SECONDARY:-8.8.8.8}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./data/backups:/usr/src/app/data/backups
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: ${PGUSER}
+      POSTGRES_PASSWORD: ${PGPASSWORD}
+      POSTGRES_DB: ${PGDATABASE}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./data/backups:/backups
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+volumes:
+  postgres_data:

@@ -57,6 +57,19 @@ docker compose --env-file .env.dev up bot
 
 This will run `prisma generate` on startup to keep the client in sync.
 
+## Production deployment
+
+Production uses `docker-compose.prod.yml` and the `prod` Dockerfile target:
+
+```bash
+cp .env.example .env.prod
+docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --build
+```
+
+The production container runs `prisma migrate deploy` before `node dist/index.js`.
+Set `RUN_MIGRATIONS=false` only if migrations are handled externally.
+See `docs/operations.md` for update, backup, and restore procedures.
+
 ## Quality checks
 
 Run the full local verification before committing:
@@ -243,6 +256,8 @@ docs/
 
 - Terms of Service: `/docs/terms-of-service.md`
 - Privacy Policy: `/docs/privacy-policy.md`
+- Operations guide: `/docs/operations.md`
+- Discord admin guide: `/docs/admin-guide.md`
 - Development plan: `/docs/plan-action-developpement.md`
 - Discord scenarios: `/docs/scenarios-discord.md`
 
