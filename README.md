@@ -140,7 +140,7 @@ Enable the following **Privileged Gateway Intents** in the Discord Developer Por
 - `/mu_games disable <game>` — disable a game
 - `/mu_games enable <game>` — enable a game
 
-The `/mu_config` menu starts on “Accueil” with a language selector and a table of recorded slots. A base settings reminder appears as a quote block. Admins can configure slot days (multiple weekdays), manage games + channels, per-game default table counts, automation timing, and use category buttons for slots, games + tables, and matches. The `Jeux & tables` category lets admins pick an existing slot date from a dropdown, select a game, and set that game's table count. Defaults can be applied in one click from the values configured on active games. New games created from the menu default to `DISCORD_CHANNEL_ID` until reassigned; W40K and AoS are prefilled with 5 and 2 tables respectively when detected.
+The `/mu_config` menu starts on “Accueil” with a language selector and a table of recorded slots. A base settings reminder appears as a quote block. Admins can configure slot days (multiple weekdays), manage games + channels, per-game default table counts, notification mentions, automation timing, and use category buttons for slots, games + tables, matches, notifications, and automations. The `Jeux & tables` category lets admins pick an existing slot date from a dropdown, select a game, and set that game's table count. Defaults can be applied in one click from the values configured on active games. New games created from the menu default to `DISCORD_CHANNEL_ID` until reassigned; W40K and AoS are prefilled with 5 and 2 tables respectively when detected.
 
 Each generated game thread also includes admin-only buttons:
 
@@ -196,7 +196,7 @@ Key vars:
 - `ADMIN_ROLE_ID` — role ID allowed to manage tables (optional; defaults to server admin)
 - `DATABASE_URL` — Postgres connection string
 - `BACKUP_DIR` — directory used by scheduled/manual Postgres backups (default: `data/backups`)
-- `MENTION_IN_THREAD` — `true`/`false`
+- `MENTION_IN_THREAD` — default `true`/`false` value before the admin changes it in `/mu_config` > “Notifications”
 - `LOG_LEVEL` — `info`, `debug`, etc.
 - `VACATION_ACADEMY` — academy used for school holidays (default: Nantes)
 - `ALLOW_INSECURE_TLS` — DEV only: disable TLS verification (default: false)

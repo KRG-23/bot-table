@@ -18,6 +18,11 @@ import type { Logger } from "pino";
 import type { AppConfig } from "../config";
 import { getPrisma } from "../db";
 import {
+  formatMentionInThread,
+  getAppSettings,
+  saveMentionInThread
+} from "../services/app-settings";
+import {
   type AutomationSettings,
   DEFAULT_AUTOMATION_SETTINGS,
   formatAutomationSettings,
@@ -499,6 +504,19 @@ export async function handleButtonInteraction(
     await saveAutomationSettings(getPrisma(), DEFAULT_AUTOMATION_SETTINGS);
     refreshSchedulers(interaction.client, config, logger);
     const payload = await buildConfigCategoryResponse("automations", config, logger);
+    await interaction.update(toUpdatePayload(payload));
+    return;
+  }
+
+  if (interaction.customId.startsWith("mu_notifications:mention_thread:")) {
+    if (!(await ensureAdmin(interaction, config))) {
+      return;
+    }
+
+    const enabled = interaction.customId.endsWith(":on");
+    await saveMentionInThread(getPrisma(), enabled);
+
+    const payload = await buildConfigCategoryResponse("notifications", config, logger);
     await interaction.update(toUpdatePayload(payload));
     return;
   }
@@ -3121,13 +3139,14 @@ function buildBackToHomeRow(): ReplyComponentRow {
   } as ReplyComponentRow;
 }
 
-type ConfigCategory = "home" | "slots" | "games" | "matches" | "automations";
+type ConfigCategory = "home" | "slots" | "games" | "matches" | "notifications" | "automations";
 
 const CONFIG_CATEGORIES: { value: ConfigCategory; label: string; description: string }[] = [
   { value: "home", label: "Accueil", description: "Vue d'ensemble" },
   { value: "slots", label: "Créneaux", description: "Gérer les créneaux" },
   { value: "games", label: "Jeux & tables", description: "Gérer jeux, canaux et tables" },
   { value: "matches", label: "Parties", description: "Gérer les parties" },
+  { value: "notifications", label: "Notifications", description: "Gérer les mentions" },
   { value: "automations", label: "Automatisations", description: "Planifier les actions" }
 ];
 
@@ -3290,6 +3309,30 @@ function buildMatchesCategoryRows() {
           custom_id: "mu_match:cancel_request",
           label: "Annuler",
           style: ButtonStyle.Secondary
+        }
+      ]
+    }
+  ];
+}
+
+function buildNotificationsCategoryRows(settings: { mentionInThread: boolean }) {
+  return [
+    {
+      type: 1,
+      components: [
+        {
+          type: 2,
+          custom_id: "mu_notifications:mention_thread:on",
+          label: "Activer mentions fil",
+          style: ButtonStyle.Success,
+          disabled: settings.mentionInThread
+        },
+        {
+          type: 2,
+          custom_id: "mu_notifications:mention_thread:off",
+          label: "Désactiver mentions fil",
+          style: ButtonStyle.Secondary,
+          disabled: !settings.mentionInThread
         }
       ]
     }
@@ -3618,6 +3661,7 @@ async function buildConfigMenuContent(config: AppConfig): Promise<string> {
   const slotDays = await getSlotDays(prisma);
   const games = await listActiveGames(prisma);
   const language = await getBotLanguage(prisma);
+  const appSettings = await getAppSettings(prisma, config);
   const automationSettings = await getAutomationSettings(prisma);
   const now = dayjs().tz(config.timezone);
   const offset = now.format("Z");
@@ -3629,6 +3673,7 @@ async function buildConfigMenuContent(config: AppConfig): Promise<string> {
     `Fuseau horaire : (UTC${offset}) ${config.timezone}`,
     `Jours des créneaux : ${formatSlotDays(slotDays)}`,
     `Jeux actifs : ${formatGamesInline(games)}`,
+    `Mentions dans les fils : ${formatMentionInThread(appSettings.mentionInThread)}`,
     ...formatAutomationSettings(automationSettings)
   ];
 
@@ -3705,6 +3750,24 @@ async function buildConfigCategoryResponse(
     return {
       content: buildConfigCategoryContent("**Parties**"),
       components: [buildConfigMenuSelect("matches"), ...buildMatchesCategoryRows()]
+    };
+  }
+
+  if (category === "notifications") {
+    const appSettings = await getAppSettings(getPrisma(), config);
+
+    return {
+      content: [
+        buildConfigCategoryContent("**Notifications**"),
+        "",
+        `Mentions dans les fils : ${formatMentionInThread(appSettings.mentionInThread)}`,
+        "Les joueurs reçoivent toujours un DM quand une partie est validée.",
+        "Cette option ajoute ou retire le message de validation directement dans le fil de soirée."
+      ].join("\n"),
+      components: [
+        buildConfigMenuSelect("notifications"),
+        ...buildNotificationsCategoryRows(appSettings)
+      ]
     };
   }
 
@@ -4198,7 +4261,9 @@ async function notifyMatchStatus(
     }))
   });
 
-  if (config.mentionInThread && interaction.channel?.isTextBased()) {
+  const appSettings = await getAppSettings(prisma, config);
+
+  if (appSettings.mentionInThread && interaction.channel?.isTextBased()) {
     try {
       const channel = interaction.channel;
       if ("send" in channel && typeof channel.send === "function") {

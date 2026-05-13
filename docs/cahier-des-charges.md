@@ -50,7 +50,7 @@
 - **Validation manuelle** : commandes admin pour valider/refuser/annuler une partie.
 - **Notifications** :
   - DM aux joueurs validés (par défaut).
-  - Option admin pour ajouter une **mention dans le fil** au moment de la validation.
+  - Option admin dans `/mu_config` > “Notifications” pour ajouter une **mention dans le fil** au moment de la validation.
 - **Annulation** : joueur ou admin peut annuler une partie avant le vendredi 18h ; libère une table.
 - **Journal** : conserver l’historique des validations/refus/annulations avec horodatage et auteur.
 - **Fermeture exceptionnelle** : si un vendredi tombe en veille ou pendant vacances scolaires (académie de Nantes), les validations sont bloquées et un message d’information est posté.
@@ -84,7 +84,7 @@
   - `/match validate <match_id>` (admin)
   - `/match refuse <match_id>` (admin)
   - `/match cancel <match_id>` (joueur impliqué ou admin)
-  - `/notif thread on|off` (admin) pour activer les mentions dans les fils.
+  - `/mu_config` > “Notifications” (admin) pour activer/désactiver les mentions dans les fils.
 - **Boutons avec modale** préférés
 - **Messages libres** : mention du bot dans un fil de la semaine avec deux pseudos + jeu pour créer une demande.
 
@@ -99,7 +99,7 @@
 ## 9. Déploiement et configuration
 
 - Conteneurisation : `docker-compose` avec services `bot` et `postgres` (+ volume de données).
-- Config via `.env.dev` et `.env.prod` (non commités) : `DISCORD_TOKEN`, `DISCORD_GUILD_ID`, `DISCORD_CHANNEL_ID`, `PGHOST`, `PGUSER`, `PGPASSWORD`, `PGDATABASE`, `TZ=Europe/Paris`, options mentions.
+- Config via `.env.dev` et `.env.prod` (non commités) : `DISCORD_TOKEN`, `DISCORD_GUILD_ID`, `DISCORD_CHANNEL_ID`, `PGHOST`, `PGUSER`, `PGPASSWORD`, `PGDATABASE`, `TZ=Europe/Paris`, valeur par défaut des mentions.
 - Image multi-arch non requise pour le moment.
 - Pas de CI/CD initialement ; exécution locale WSL.
 

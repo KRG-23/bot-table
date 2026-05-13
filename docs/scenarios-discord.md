@@ -28,6 +28,7 @@ Objectif : s'assurer qu'un admin peut tout faire via les commandes **ou** via l'
 | Parties         | Valider une partie         | `/mu_match validate`           | Bouton “Valider” + modal                               |
 | Parties         | Refuser une partie         | `/mu_match refuse`             | Bouton “Refuser” + modal                               |
 | Parties         | Annuler une partie         | `/mu_match cancel`             | Bouton “Annuler” + modal                               |
+| Notifications   | Mention dans les fils      | _N/A (menu uniquement)_        | Catégorie “Notifications” + boutons On/Off             |
 | Automatisations | Configurer le planning     | _N/A (menu uniquement)_        | Catégorie “Automatisations” + modal                    |
 | Automatisations | Réinitialiser les valeurs  | _N/A (menu uniquement)_        | Bouton “Valeurs par défaut”                            |
 
@@ -36,6 +37,7 @@ Objectif : s'assurer qu'un admin peut tout faire via les commandes **ou** via l'
 - Le menu `/mu_config` est public, mais les actions admin restent protégées par rôle.
 - L’onglet “Accueil” propose le choix de langue et un tableau des créneaux enregistrés, avec un rappel des paramètres de base en citation.
 - La catégorie “Jeux & tables” regroupe le référentiel jeux/canaux, les tables par défaut et les tables par soirée.
+- La catégorie “Notifications” règle l’ajout de messages de validation dans les fils ; les DM joueurs restent envoyés dans tous les cas.
 - La génération mensuelle applique les tables par défaut configurées sur les jeux actifs aux nouveaux créneaux et aux créneaux ouverts sans table.
 - Les jeux sont configurés dynamiquement et chaque jeu doit avoir un canal associé.
 - Les tables d’une soirée se règlent en choisissant une date parmi les créneaux déjà créés, puis un jeu.

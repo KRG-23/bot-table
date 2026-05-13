@@ -7,6 +7,7 @@ import type { AppConfig } from "../config";
 import { getPrisma } from "../db";
 import { formatFrenchDate } from "../utils/dates";
 
+import { getAppSettings } from "./app-settings";
 import { getEventTableCapacity, getGameTableCapacity } from "./table-capacity";
 
 type ReplyComponents = InteractionReplyOptions["components"];
@@ -204,7 +205,9 @@ async function notifyAutoValidatedMatch(
     }))
   });
 
-  if (!config.mentionInThread) {
+  const appSettings = await getAppSettings(prisma, config);
+
+  if (!appSettings.mentionInThread) {
     return;
   }
 

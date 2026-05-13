@@ -62,13 +62,13 @@
 
 ## Phase 6 — Notifications & règles métier
 
-- [ ] Option mention dans le fil (setting admin)
-- [ ] DM systématique + option mention thread
+- [x] Option mention dans le fil (setting admin via `/mu_config` > Notifications)
+- [x] DM systématique + option mention thread
 - [ ] Blocage sur dates fermées (vacances)
 - [ ] Auto-validation à la demande (après annulation)
 - [ ] Empêcher double réservation joueur
 - [ ] Gestion “abandon” (nouvelle notification possible)
-  - [ ] Bloquant : clarifier si mention dans thread est activable par serveur ou par événement
+  - [x] Bloquant : clarifier si mention dans thread est activable par serveur ou par événement (choix actuel : serveur)
 
 ## Phase 7 — Observabilité & qualité
 
