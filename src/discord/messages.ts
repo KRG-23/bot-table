@@ -188,6 +188,19 @@ export async function handleMatchMessage(
   });
 
   if (duplicate) {
+    logger.info(
+      {
+        source: "thread_message",
+        matchId: duplicate.id,
+        eventId: event.id,
+        gameId: game.id,
+        player1DiscordId: parsed.player1Id,
+        player2DiscordId: parsed.player2Id,
+        authorId: message.author.id,
+        threadId: message.channel.id
+      },
+      "Match creation refused: duplicate player booking"
+    );
     await message.reply("⛔ Un des joueurs a déjà une partie enregistrée pour cette soirée.");
     return;
   }
@@ -201,6 +214,21 @@ export async function handleMatchMessage(
       messageId: message.id
     }
   });
+
+  logger.info(
+    {
+      source: "thread_message",
+      matchId: match.id,
+      eventId: event.id,
+      gameId: game.id,
+      player1DiscordId: parsed.player1Id,
+      player2DiscordId: parsed.player2Id,
+      authorId: message.author.id,
+      messageId: message.id,
+      threadId: message.channel.id
+    },
+    "Match created"
+  );
 
   const gameLabel = game.label;
   const automationSettings = await getAutomationSettings(prisma);

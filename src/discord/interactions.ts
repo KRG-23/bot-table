@@ -2894,6 +2894,18 @@ async function handleMatchCreate(
   });
 
   if (duplicate) {
+    logger.info(
+      {
+        source: "interaction",
+        matchId: duplicate.id,
+        eventId: event.id,
+        gameId: game.id,
+        player1DiscordId: input.player1Id,
+        player2DiscordId: input.player2Id,
+        actorId: interaction.user.id
+      },
+      "Match creation refused: duplicate player booking"
+    );
     await interaction.editReply({
       content: "⛔ Un des joueurs a déjà une partie enregistrée pour cette soirée."
     });
@@ -2908,6 +2920,19 @@ async function handleMatchCreate(
       gameId: game.id
     }
   });
+
+  logger.info(
+    {
+      source: "interaction",
+      matchId: match.id,
+      eventId: event.id,
+      gameId: game.id,
+      player1DiscordId: input.player1Id,
+      player2DiscordId: input.player2Id,
+      actorId: interaction.user.id
+    },
+    "Match created"
+  );
 
   const gameLabel = game.label;
   const automationSettings = await getAutomationSettings(prisma);
@@ -3992,6 +4017,10 @@ async function performMatchValidate(
   }
 
   if (!(await ensureAdmin(interaction, config))) {
+    logger.warn(
+      { action: "validate", matchId, actorId: interaction.user.id },
+      "Match action denied"
+    );
     return;
   }
 
@@ -4035,6 +4064,17 @@ async function performMatchValidate(
     data: { status: MatchStatus.VALIDE }
   });
 
+  logger.info(
+    {
+      action: "validate",
+      matchId: match.id,
+      eventId: match.eventId,
+      gameId: match.gameId,
+      actorId: interaction.user.id
+    },
+    "Match validated"
+  );
+
   const summary = buildMatchSummary(match, config);
   await notifyMatchStatus(
     interaction,
@@ -4065,6 +4105,7 @@ async function performMatchRefuse(
   }
 
   if (!(await ensureAdmin(interaction, config))) {
+    logger.warn({ action: "refuse", matchId, actorId: interaction.user.id }, "Match action denied");
     return;
   }
 
@@ -4092,6 +4133,18 @@ async function performMatchRefuse(
     where: { id: match.id },
     data: { status: MatchStatus.REFUSE }
   });
+
+  logger.info(
+    {
+      action: "refuse",
+      matchId: match.id,
+      eventId: match.eventId,
+      gameId: match.gameId,
+      actorId: interaction.user.id,
+      hasReason: Boolean(reason)
+    },
+    "Match refused"
+  );
 
   const summary = buildMatchSummary(match, config);
   const reasonSuffix = reason ? `\nRaison : ${reason}` : "";
@@ -4131,7 +4184,7 @@ async function performMatchCancel(
     return;
   }
 
-  if (!(await canCancelMatch(interaction, config, match))) {
+  if (!(await canCancelMatch(interaction, config, logger, match))) {
     return;
   }
 
@@ -4180,6 +4233,35 @@ async function performMatchCancel(
         ]
       : [];
 
+  logger.info(
+    {
+      action: "cancel",
+      matchId: match.id,
+      eventId: match.eventId,
+      gameId: match.gameId,
+      actorId: interaction.user.id,
+      previousStatus: match.status,
+      hasReason: Boolean(reason),
+      autoValidated: autoValidation.autoValidated,
+      pendingAfterReview: autoValidation.pendingAfterReview,
+      remainingTables: autoValidation.remainingTables
+    },
+    "Match cancelled"
+  );
+
+  if (autoValidation.autoValidated > 0) {
+    logger.info(
+      {
+        eventId: match.eventId,
+        gameId: match.gameId,
+        cancelledMatchId: match.id,
+        autoValidated: autoValidation.autoValidated,
+        remainingTables: autoValidation.remainingTables
+      },
+      "Pending matches auto-validated after cancellation"
+    );
+  }
+
   await interaction.editReply({
     content: ["⚠️ Partie annulée.", ...autoValidationLines].join("\n")
   });
@@ -4204,6 +4286,10 @@ async function showMatchReasonModal(
 
   if (action === "refuse") {
     if (!interaction.member || !isAdminMember(interaction.member, config)) {
+      logger.warn(
+        { action: "refuse", matchId, actorId: interaction.user.id },
+        "Match action denied"
+      );
       await replyEphemeral(interaction, {
         content: "⛔ Cette action est réservée aux administrateurs."
       });
@@ -4226,6 +4312,10 @@ async function showMatchReasonModal(
     const isAdmin = Boolean(interaction.member && isAdminMember(interaction.member, config));
 
     if (!canUseMatchAction("cancel", isAdmin, interaction.user.id, match)) {
+      logger.warn(
+        { action: "cancel", matchId, actorId: interaction.user.id },
+        "Match action denied"
+      );
       await replyEphemeral(interaction, {
         content: "⛔ Vous ne pouvez pas annuler cette partie."
       });
@@ -4259,7 +4349,9 @@ async function showMatchReasonModal(
 async function canCancelMatch(
   interaction: EphemeralInteraction,
   config: AppConfig,
+  logger: Logger,
   match: {
+    id: number;
     player1: { discordId: string };
     player2: { discordId: string };
   }
@@ -4267,6 +4359,10 @@ async function canCancelMatch(
   const isAdmin = Boolean(interaction.member && isAdminMember(interaction.member, config));
 
   if (!canUseMatchAction("cancel", isAdmin, interaction.user.id, match)) {
+    logger.warn(
+      { action: "cancel", matchId: match.id, actorId: interaction.user.id },
+      "Match action denied"
+    );
     await replyEphemeral(interaction, {
       content: "⛔ Vous ne pouvez pas annuler cette partie."
     });

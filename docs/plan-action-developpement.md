@@ -72,7 +72,8 @@
 
 ## Phase 7 — Observabilité & qualité
 
-- [ ] Logs structurés + rotation
+- [x] Logs structurés actions critiques
+- [ ] Rotation des logs
 - [ ] Métriques basiques (parties, erreurs Discord)
 - [x] Tests unitaires règles métier
 - [x] Tests parsing messages
