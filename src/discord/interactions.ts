@@ -3214,21 +3214,15 @@ function buildSlotsCategoryRows() {
       components: [
         {
           type: 2,
-          custom_id: "mu_slots:configure_days",
-          label: "Configurer les jours",
-          style: ButtonStyle.Primary
+          custom_id: "mu_slots:generate_current_month",
+          label: "Générer le mois",
+          style: ButtonStyle.Success
         }
       ]
     },
     {
       type: 1,
       components: [
-        {
-          type: 2,
-          custom_id: "mu_slots:generate_current_month",
-          label: "Générer le mois",
-          style: ButtonStyle.Secondary
-        },
         {
           type: 2,
           custom_id: "mu_slots:delete_month",
@@ -3240,6 +3234,12 @@ function buildSlotsCategoryRows() {
           custom_id: "mu_slots:delete_date",
           label: "Supprimer une date",
           style: ButtonStyle.Danger
+        },
+        {
+          type: 2,
+          custom_id: "mu_slots:configure_days",
+          label: "Configurer les jours",
+          style: ButtonStyle.Primary
         }
       ]
     }
