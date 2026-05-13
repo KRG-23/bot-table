@@ -258,6 +258,7 @@ docs/
 - Privacy Policy: `/docs/privacy-policy.md`
 - Operations guide: `/docs/operations.md`
 - Discord admin guide: `/docs/admin-guide.md`
+- Final acceptance checklist: `/docs/acceptance-checklist.md`
 - Development plan: `/docs/plan-action-developpement.md`
 - Discord scenarios: `/docs/scenarios-discord.md`
 

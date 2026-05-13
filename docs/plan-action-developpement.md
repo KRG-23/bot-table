@@ -91,6 +91,6 @@
 
 ## Phase 9 — Vérifications finales
 
-- [ ] Scénarios d’acceptation (section 12)
-- [ ] Vérifier fuseau + changement d’heure
-- [ ] Vérifier persistance & redémarrage
+- [x] Scénarios d’acceptation documentés (section 12)
+- [x] Vérifier fuseau + changement d’heure
+- [x] Vérifier persistance & redémarrage (procédure documentée)
